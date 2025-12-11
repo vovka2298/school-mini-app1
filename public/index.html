@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Кабинет преподавателя</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📅</text></svg>">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    body {
+      margin: 0;
+      background: #0d1117;
+      color: #c9d1d9;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    
+    .header {
+      background: #161b22;
+      padding: 16px;
+      border-bottom: 1px solid #30363d;
+    }
+    
+    .header-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    
+    .avatar {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      border: 3px solid #58a6ff;
+      background: #21262d;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+    }
+    
+    .refresh-btn {
+      background: #238636;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.2s;
+      white-space: nowrap;
+    }
+    
+    .refresh-btn:hover {
+      background: #2ea043;
+    }
+    
+    .refresh-btn:active {
+      transform: scale(0.98);
+    }
+    
+    .tabs {
+      display: flex;
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+    }
+    
+    .tab {
+      flex: 1;
+      padding: 16px;
+      text-align: center;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      user-select: none;
+    }
+    
+    .tab.active {
+      background: #1f6feb;
+      color: white;
+    }
+    
+    .legend {
+      padding: 14px;
+      background: #161b22;
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      font-size: 13px;
+      flex-wrap: wrap;
+    }
+    
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .legend-box {
+      width: 16px;
+      height: 16px;
+      border-radius: 6px;
+    }
+    
+    .content {
+      padding: 12px;
+      height: calc(100vh - 250px);
+      overflow-y: auto;
+      position: relative;
+    }
+    
+    .week-header {
+      display: flex;
+      margin-left: 68px;
+      margin-bottom: 8px;
+      font-size: 12px;
+      color: #8b949e;
+    }
+    
+    .day-name {
+      width: 88px;
+      text-align: center;
+      flex: none;
+    }
+    
+    .time-row {
+      display: flex;
+      align-items: center;
+      margin: 3px 0;
+    }
+    
+    .time-label {
+      width: 68px;
+      text-align: right;
+      font-size: 13px;
+      color: #8b949e;
+      padding-right: 12px;
+      flex: none;
+    }
+    
+    .slots {
+      display: flex;
+      flex: 1;
+    }
+    
+    .slot {
+      width: 80px;
+      height: 56px;
+      margin: 0 4px;
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.2s;
+      overflow: hidden;
+      user-select: none;
+    }
+    
+    .slot:hover {
+      transform: scale(1.02);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+    
+    .state-0 { background: #21262d; color: #8b949e; }
+    .state-1 { background: #238636; color: white; }
+    .state-2 { background: #da3633; color: white; }
+    
+    .slot-time {
+      font-size: 9px;
+      opacity: 0.8;
+      margin-bottom: 3px;
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 60px 20px;
+      color: #8b949e;
+      font-size: 16px;
+    }
+    
+    .error {
+      text-align: center;
+      padding: 60px 20px;
+      color: #da3633;
+    }
+    
+    .sync-notice {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #1f6feb;
+      color: white;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 12px;
+      animation: fadeIn 0.3s;
+      z-index: 1000;
+    }
+    
+    .cache-notice {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      background: #ffa500;
+      color: #000;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 12px;
+      animation: fadeIn 0.3s;
+      z-index: 1000;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    button {
+      font-family: inherit;
+    }
+    
+    #lastSync {
+      font-size: 11px;
+      color: #8b949e;
+      text-align: center;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-top">
+      <div class="user-info">
+        <div class="avatar">👨‍🏫</div>
+        <div>
+          <h3 id="userName">Загрузка...</h3>
+          <p>Кабинет преподавателя</p>
+        </div>
+      </div>
+      <button class="refresh-btn" id="refreshBtn" onclick="forceRefresh()">
+        🔄 Обновить
+      </button>
+    </div>
+    <div id="lastSync"></div>
+  </div>
+  
+  <div class="tabs">
+    <div class="tab active" onclick="showSchedule()">Расписание</div>
+    <div class="tab" onclick="showBookings()">Ученики</div>
+    <div class="tab" onclick="showLessons()">Занятия</div>
+    <div class="tab" onclick="showSubjects()">Предметы</div>
+  </div>
+  
+  <div class="legend">
+    <div class="legend-item"><div class="legend-box" style="background:#21262d"></div>Не работаю</div>
+    <div class="legend-item"><div class="legend-box" style="background:#238636"></div>Свободен</div>
+    <div class="legend-item"><div class="legend-box" style="background:#da3633"></div>Занят</div>
+  </div>
+  
+  <div class="content" id="content">
+    <div class="loading">Загрузка расписания...</div>
+  </div>
+
+  <script>
+    // Telegram Web App
+    if (typeof Telegram !== 'undefined') {
+      Telegram.WebApp.ready();
+      Telegram.WebApp.expand();
+    }
+    
+    // Константы
+    const DAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+    const FULL_DAYS = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
+    const TIMES = [];
+    for (let h = 8; h <= 22; h++) {
+      TIMES.push(`${h.toString().padStart(2, '0')}:00`);
+      if (h < 22) TIMES.push(`${h.toString().padStart(2, '0')}:30`);
+    }
+    const TEXTS = ['Не работаю', 'Свободен', 'Занят'];
+    
+    // Данные
+    let schedule = {};
+    let lastScheduleHash = '';
+    let isSaving = false;
+    let lastUpdateTime = 0;
+    
+    // Получить telegram_id из Telegram Web App
+    function getTelegramId() {
+      if (typeof Telegram !== 'undefined' && Telegram.WebApp && Telegram.WebApp.initDataUnsafe) {
+        const user = Telegram.WebApp.initDataUnsafe.user;
+        if (user && user.id) {
+          return user.id.toString();
+        }
+      }
+      // Fallback для разработки
+      return '913096324';
+    }
+    
+    const MY_ID = getTelegramId();
+    const STORAGE_KEY = 'teacher_schedule_v2';
+    const CACHE_TTL = 30000; // 30 секунд
+    
+    // ===== УТИЛИТЫ =====
+    
+    // Генерация хэша расписания
+    function getScheduleHash(sched) {
+      let hash = '';
+      FULL_DAYS.forEach(day => {
+        TIMES.forEach(time => {
+          const state = sched[day]?.[time] || 0;
+          hash += `${day}-${time}:${state}|`;
+        });
+      });
+      return hash;
+    }
+    
+    // Сохранение в кеш
+    function saveToCache(data) {
+      try {
+        const cache = {
+          data: data,
+          timestamp: Date.now(),
+          hash: getScheduleHash(data)
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(cache));
+      } catch (e) {
+        console.warn("Не удалось сохранить в кеш:", e);
+      }
+    }
+    
+    // Загрузка из кеша
+    function loadFromCache() {
+      try {
+        const cached = localStorage.getItem(STORAGE_KEY);
+        if (!cached) return null;
+        
+        const cache = JSON.parse(cached);
+        const now = Date.now();
+        
+        if (now - cache.timestamp < CACHE_TTL) {
+          return cache.data;
+        }
+      } catch (e) {
+        console.warn("Ошибка загрузки из кеша:", e);
+      }
+      return null;
+    }
+    
+    // Показать уведомление
+    function showNotice(text, color = '#1f6feb', duration = 2000) {
+      const notice = document.createElement('div');
+      notice.className = 'sync-notice';
+      notice.style.background = color;
+      notice.textContent = text;
+      document.body.appendChild(notice);
+      
+      setTimeout(() => {
+        notice.style.opacity = '0';
+        notice.style.transform = 'translateY(10px)';
+        setTimeout(() => document.body.removeChild(notice), 300);
+      }, duration);
+    }
+    
+    // Обновить время последней синхронизации
+    function updateLastSyncTime() {
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('ru-RU', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        second: '2-digit'
+      });
+      document.getElementById('lastSync').textContent = `Последнее обновление: ${timeStr}`;
+    }
+    
+    // ===== ОСНОВНЫЕ ФУНКЦИИ =====
+    
+    // Загрузка расписания
+    async function loadSchedule(force = false) {
+      try {
+        const refreshBtn = document.getElementById('refreshBtn');
+        refreshBtn.disabled = true;
+        refreshBtn.textContent = '⏳ Загрузка...';
+        
+        // Если не форсируем и есть кеш - показываем его
+        if (!force) {
+          const cached = loadFromCache();
+          if (cached) {
+            schedule = cached;
+            renderSchedule();
+            showNotice("Данные из кеша", "#ffa500", 1500);
+          }
+        }
+        
+        // Загружаем с сервера
+        const url = `/api/my-schedule?tgId=${MY_ID}&t=${Date.now()}`;
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+          throw new Error(`Ошибка ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        // Проверяем изменились ли данные
+        const newHash = getScheduleHash(data);
+        const shouldUpdate = force || newHash !== lastScheduleHash;
+        
+        if (shouldUpdate) {
+          schedule = data;
+          lastScheduleHash = newHash;
+          lastUpdateTime = data._timestamp || Date.now();
+          
+          // Сохраняем в кеш
+          saveToCache(data);
+          
+          // Рендерим
+          renderSchedule();
+          updateLastSyncTime();
+          
+          if (!force) {
+            showNotice("Расписание обновлено");
+          }
+          
+          console.log("✅ Расписание загружено (сервер)");
+        } else {
+          console.log("ℹ️ Данные не изменились");
+        }
+        
+      } catch (error) {
+        console.error("❌ Ошибка загрузки:", error);
+        
+        // Пробуем показать кеш при ошибке
+        const cached = loadFromCache();
+        if (cached && Object.keys(cached).length > 0) {
+          schedule = cached;
+          renderSchedule();
+          showNotice("Оффлайн режим (данные из кеша)", "#ffa500", 3000);
+        } else {
+          document.getElementById('content').innerHTML = `
+            <div class="error">
+              Ошибка загрузки расписания
+              <br>
+              <button onclick="forceRefresh()" style="margin-top: 20px;">Повторить</button>
+            </div>
+          `;
+        }
+      } finally {
+        const refreshBtn = document.getElementById('refreshBtn');
+        refreshBtn.disabled = false;
+        refreshBtn.textContent = '🔄 Обновить';
+      }
+    }
+    
+    // Принудительное обновление
+    async function forceRefresh() {
+      showNotice("Принудительное обновление...", "#1f6feb");
+      await loadSchedule(true);
+    }
+    
+    // Рендер расписания
+    function renderSchedule() {
+      if (Object.keys(schedule).length === 0) {
+        document.getElementById('content').innerHTML = `
+          <div class="loading">
+            Расписание пустое. Нажмите на ячейки, чтобы настроить.
+          </div>
+        `;
+        return;
+      }
+      
+      let html = '<div class="week-header"><div></div>';
+      DAYS.forEach(d => html += `<div class="day-name">${d}</div>`);
+      html += '</div>';
+      
+      TIMES.forEach(time => {
+        html += `<div class="time-row"><div class="time-label">${time}</div><div class="slots">`;
+        DAYS.forEach((_, i) => {
+          const day = FULL_DAYS[i];
+          const state = schedule[day]?.[time] || 0;
+          html += `<div class="slot state-${state}" onclick="toggleSlot('${day}', '${time}', this)">
+            <div class="slot-time">${time}</div>
+            <div>${TEXTS[state]}</div>
+          </div>`;
+        });
+        html += '</div></div>';
+      });
+      
+      document.getElementById('content').innerHTML = html;
+    }
+    
+    // Переключение ячейки
+    async function toggleSlot(day, time, element) {
+      if (isSaving) {
+        showNotice("Подождите, идет сохранение...", "#ffa500", 1000);
+        return;
+      }
+      
+      isSaving = true;
+      
+      try {
+        // Локальное обновление
+        if (!schedule[day]) schedule[day] = {};
+        const current = schedule[day][time] || 0;
+        const next = (current + 1) % 3;
+        schedule[day][time] = next;
+        
+        // Мгновенное обновление UI
+        element.className = `slot state-${next}`;
+        element.querySelector('div:last-child').textContent = TEXTS[next];
+        
+        // Сохраняем в кеш сразу
+        saveToCache(schedule);
+        lastScheduleHash = getScheduleHash(schedule);
+        
+        // Отложенное сохранение на сервер
+        setTimeout(async () => {
+          try {
+            const response = await fetch(`/api/schedule/${MY_ID}?tgId=${MY_ID}&t=${Date.now()}`, {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify(schedule)
+            });
+            
+            const result = await response.json();
+            if (result.ok) {
+              showNotice("Сохранено", "#238636", 1000);
+              lastUpdateTime = result._timestamp || Date.now();
+              updateLastSyncTime();
+            }
+          } catch (saveError) {
+            console.error("Ошибка сохранения на сервер:", saveError);
+            showNotice("Ошибка сети", "#da3633", 2000);
+          }
+        }, 500); // Задержка 500ms для группировки изменений
+        
+      } finally {
+        setTimeout(() => {
+          isSaving = false;
+        }, 300);
+      }
+    }
+    
+    // Вкладки
+    function showSchedule() {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab')[0].classList.add('active');
+      loadSchedule();
+    }
+    
+    // Функция для загрузки заявок (Ученики)
+    async function showBookings() {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab')[1].classList.add('active');
+      
+      document.getElementById('content').innerHTML = `
+        <div class="loading">
+          Загрузка заявок...
+        </div>
+      `;
+      
+      try {
+        const response = await fetch(`/api/bookings/${MY_ID}?tgId=${MY_ID}&t=${Date.now()}`);
+        const data = await response.json();
+        
+        if (data.bookings.length === 0) {
+          document.getElementById('content').innerHTML = `
+            <div class="loading">
+              Нет активных заявок
+            </div>
+          `;
+          return;
+        }
+        
+        let html = '<div style="padding: 16px;">';
+        html += '<h3 style="margin-top: 0; margin-bottom: 16px;">ЗАЯВКИ ОТ УЧЕНИКОВ</h3>';
+        
+        data.bookings.forEach(booking => {
+          const statusColors = {
+            'pending': '#ffa500',
+            'confirmed': '#238636',
+            'cancelled': '#da3633',
+            'completed': '#8b949e'
+          };
+          
+          const statusTexts = {
+            'pending': 'Ожидание',
+            'confirmed': 'Подтверждено',
+            'cancelled': 'Отменено',
+            'completed': 'Завершено'
+          };
+          
+          html += `
+            <div style="
+              background: #161b22;
+              border-radius: 12px;
+              padding: 16px;
+              margin-bottom: 12px;
+              border-left: 4px solid ${statusColors[booking.status] || '#8b949e'};
+            ">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <strong>${booking.first_name} ${booking.last_name || ''}</strong>
+                  <div style="font-size: 14px; color: #8b949e; margin-top: 4px;">
+                    📅 ${booking.day}, ${booking.time_slot}
+                  </div>
+                  <div style="font-size: 14px; margin-top: 4px;">
+                    Предмет: ${booking.subject || 'Не указан'}
+                  </div>
+                </div>
+                <div style="text-align: right;">
+                  <div style="
+                    background: ${statusColors[booking.status] || '#8b949e'};
+                    color: white;
+                    padding: 4px 12px;
+                    border-radius: 20px;
+                    font-size: 12px;
+                    display: inline-block;
+                  ">
+                    ${statusTexts[booking.status] || booking.status}
+                  </div>
+                  ${booking.status === 'pending' ? `
+                    <div style="margin-top: 8px;">
+                      <button onclick="updateBooking(${booking.id}, 'confirmed')" 
+                        style="
+                          background: #238636;
+                          color: white;
+                          border: none;
+                          padding: 6px 12px;
+                          border-radius: 6px;
+                          font-size: 12px;
+                          margin-right: 4px;
+                          cursor: pointer;
+                        ">
+                        ✓ Принять
+                      </button>
+                      <button onclick="updateBooking(${booking.id}, 'cancelled')"
+                        style="
+                          background: #da3633;
+                          color: white;
+                          border: none;
+                          padding: 6px 12px;
+                          border-radius: 6px;
+                          font-size: 12px;
+                          cursor: pointer;
+                        ">
+                        ✕ Отклонить
+                      </button>
+                    </div>
+                  ` : ''}
+                </div>
+              </div>
+              <div style="font-size: 12px; color: #8b949e; margin-top: 8px;">
+                Создано: ${new Date(booking.created_at).toLocaleDateString('ru-RU')}
+              </div>
+            </div>
+          `;
+        });
+        
+        html += '</div>';
+        document.getElementById('content').innerHTML = html;
+        
+      } catch (error) {
+        console.error('Ошибка загрузки заявок:', error);
+        document.getElementById('content').innerHTML = `
+          <div class="error">
+            Ошибка загрузки заявок
+            <br>
+            <button onclick="showBookings()" style="margin-top: 20px;">Повторить</button>
+          </div>
+        `;
+      }
+    }
+    
+    // Глобальная функция для обновления статуса заявки
+    window.updateBooking = async function(bookingId, status) {
+      try {
+        const response = await fetch(`/api/booking/${bookingId}/status?t=${Date.now()}`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ status })
+        });
+        
+        if (response.ok) {
+          showNotice(`Заявка ${status === 'confirmed' ? 'принята' : 'отклонена'}`, 
+                    status === 'confirmed' ? '#238636' : '#da3633');
+          showBookings();
+        }
+      } catch (error) {
+        console.error('Ошибка обновления заявки:', error);
+        showNotice('Ошибка обновления', '#da3633');
+      }
+    };
+    
+    function showSubjects() {
+      window.location.href = '/subjects.html';
+    }
+    
+    // Функция для загрузки и отображения занятий
+    async function showLessons() {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab')[2].classList.add('active');
+      
+      document.getElementById('content').innerHTML = `
+        <div class="loading">
+          Загрузка данных...
+        </div>
+      `;
+      
+      try {
+        // Загружаем учеников
+        const studentsResponse = await fetch(`/api/teacher/students?tgId=${MY_ID}&t=${Date.now()}`);
+        const studentsData = await studentsResponse.json();
+        const students = studentsData.students || [];
+        
+        // Загружаем предметы
+        const profileResponse = await fetch(`/api/profile/${MY_ID}?tgId=${MY_ID}&t=${Date.now()}`);
+        const profileData = await profileResponse.json();
+        const subjects = profileData.subjects || [];
+        
+        let html = `
+          <div style="padding: 16px;">
+            <h3 style="margin-top: 0; margin-bottom: 16px;">Проведенные занятия</h3>
+            
+            <button onclick="openAddLessonModal()" style="
+              background: #238636;
+              color: white;
+              border: none;
+              padding: 12px 20px;
+              border-radius: 8px;
+              font-size: 14px;
+              cursor: pointer;
+              margin-bottom: 16px;
+              width: 100%;
+            ">
+              + Добавить занятие
+            </button>
+            
+            <div id="lessonsList" style="color: #8b949e; text-align: center; padding: 40px;">
+              Загрузка занятий...
+            </div>
+          </div>
+        `;
+        
+        document.getElementById('content').innerHTML = html;
+        
+        // Сохраняем данные для модального окна
+        window.lessonsStudents = students;
+        window.lessonsSubjects = subjects;
+        
+        // Здесь можно добавить загрузку списка проведенных занятий
+        // Пока просто показываем форму добавления
+        
+      } catch (error) {
+        console.error('Ошибка загрузки данных:', error);
+        document.getElementById('content').innerHTML = `
+          <div class="error">
+            Ошибка загрузки данных
+            <br>
+            <button onclick="showLessons()" style="margin-top: 20px;">Повторить</button>
+          </div>
+        `;
+      }
+    }
+    
+    // Модальное окно для добавления занятия
+    function openAddLessonModal() {
+      const students = window.lessonsStudents || [];
+      const subjects = window.lessonsSubjects || [];
+      
+      if (students.length === 0) {
+        showNotice('Сначала добавьте учеников через менеджера', 'error');
+        return;
+      }
+      
+      const today = new Date().toISOString().split('T')[0];
+      const now = new Date();
+      const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+      
+      const modal = document.createElement('div');
+      modal.id = 'addLessonModal';
+      modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      `;
+      
+      modal.innerHTML = `
+        <div style="
+          background: #161b22;
+          border-radius: 12px;
+          padding: 24px;
+          max-width: 400px;
+          width: 100%;
+          border: 1px solid #30363d;
+        ">
+          <div style="font-size: 20px; font-weight: 600; margin-bottom: 16px; color: white;">
+            Добавить занятие
+          </div>
+          <form id="addLessonForm" onsubmit="saveLesson(event)">
+            <div style="margin-bottom: 16px;">
+              <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #c9d1d9;">Ученик *</label>
+              <select id="lessonStudent" required style="
+                width: 100%;
+                padding: 12px;
+                background: #21262d;
+                border: 1px solid #30363d;
+                border-radius: 8px;
+                color: white;
+                font-size: 14px;
+                box-sizing: border-box;
+              ">
+                <option value="">Выберите ученика</option>
+                ${students.map(s => `
+                  <option value="${s.id}">${s.first_name} ${s.last_name || ''} ${s.class_name ? `(${s.class_name})` : ''}</option>
+                `).join('')}
+              </select>
+            </div>
+            <div style="margin-bottom: 16px;">
+              <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #c9d1d9;">Предмет</label>
+              <select id="lessonSubject" style="
+                width: 100%;
+                padding: 12px;
+                background: #21262d;
+                border: 1px solid #30363d;
+                border-radius: 8px;
+                color: white;
+                font-size: 14px;
+                box-sizing: border-box;
+              ">
+                <option value="">Не указан</option>
+                ${subjects.map(s => `<option value="${s}">${s}</option>`).join('')}
+              </select>
+            </div>
+            <div style="margin-bottom: 16px;">
+              <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #c9d1d9;">Дата *</label>
+              <input type="date" id="lessonDate" value="${today}" required style="
+                width: 100%;
+                padding: 12px;
+                background: #21262d;
+                border: 1px solid #30363d;
+                border-radius: 8px;
+                color: white;
+                font-size: 14px;
+                box-sizing: border-box;
+              ">
+            </div>
+            <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+              <div style="flex: 1;">
+                <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #c9d1d9;">Начало *</label>
+                <input type="time" id="lessonStartTime" value="${currentTime}" required style="
+                  width: 100%;
+                  padding: 12px;
+                  background: #21262d;
+                  border: 1px solid #30363d;
+                  border-radius: 8px;
+                  color: white;
+                  font-size: 14px;
+                  box-sizing: border-box;
+                ">
+              </div>
+              <div style="flex: 1;">
+                <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #c9d1d9;">Окончание *</label>
+                <input type="time" id="lessonEndTime" required style="
+                  width: 100%;
+                  padding: 12px;
+                  background: #21262d;
+                  border: 1px solid #30363d;
+                  border-radius: 8px;
+                  color: white;
+                  font-size: 14px;
+                  box-sizing: border-box;
+                ">
+              </div>
+            </div>
+            <div style="margin-bottom: 16px;">
+              <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #c9d1d9;">Заметки</label>
+              <textarea id="lessonNotes" rows="3" style="
+                width: 100%;
+                padding: 12px;
+                background: #21262d;
+                border: 1px solid #30363d;
+                border-radius: 8px;
+                color: white;
+                font-size: 14px;
+                box-sizing: border-box;
+                resize: vertical;
+                font-family: inherit;
+              "></textarea>
+            </div>
+            <div style="display: flex; gap: 12px; margin-top: 20px;">
+              <button type="button" onclick="closeAddLessonModal()" style="
+                flex: 1;
+                padding: 12px;
+                background: #21262d;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+              ">Отмена</button>
+              <button type="submit" style="
+                flex: 1;
+                padding: 12px;
+                background: #1f6feb;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+              ">Сохранить</button>
+            </div>
+          </form>
+        </div>
+      `;
+      
+      document.body.appendChild(modal);
+    }
+    
+    function closeAddLessonModal() {
+      const modal = document.getElementById('addLessonModal');
+      if (modal) {
+        document.body.removeChild(modal);
+      }
+    }
+    
+    async function saveLesson(event) {
+      event.preventDefault();
+      
+      const studentId = document.getElementById('lessonStudent').value;
+      const subject = document.getElementById('lessonSubject').value;
+      const lessonDate = document.getElementById('lessonDate').value;
+      const startTime = document.getElementById('lessonStartTime').value;
+      const endTime = document.getElementById('lessonEndTime').value;
+      const notes = document.getElementById('lessonNotes').value.trim();
+      
+      if (!startTime || !endTime) {
+        showNotice('Укажите время начала и окончания', 'error');
+        return;
+      }
+      
+      if (startTime >= endTime) {
+        showNotice('Время окончания должно быть позже времени начала', 'error');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`/api/lesson?tgId=${MY_ID}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            student_id: parseInt(studentId),
+            subject: subject || null,
+            lesson_date: lessonDate,
+            start_time: startTime,
+            end_time: endTime,
+            notes: notes || null
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok && result.ok) {
+          showNotice('Занятие успешно добавлено', 'success');
+          closeAddLessonModal();
+          showLessons();
+        } else {
+          showNotice(result.error || 'Ошибка сохранения занятия', 'error');
+        }
+        
+      } catch (error) {
+        console.error('Ошибка сохранения занятия:', error);
+        showNotice('Ошибка сохранения занятия', 'error');
+      }
+    }
+    
+    // Глобальные функции
+    window.showLessons = showLessons;
+    window.openAddLessonModal = openAddLessonModal;
+    window.closeAddLessonModal = closeAddLessonModal;
+    window.saveLesson = saveLesson;
+    
+    // Загружаем пользователя
+    async function loadUser() {
+      try {
+        const response = await fetch(`/api/user?tgId=${MY_ID}&t=${Date.now()}`);
+        const user = await response.json();
+        document.getElementById('userName').textContent = user.name || "Преподаватель";
+      } catch (error) {
+        document.getElementById('userName').textContent = "Преподаватель";
+      }
+    }
+    
+    // Автоматическая синхронизация
+    function startAutoSync() {
+      // Проверка каждые 60 секунд
+      setInterval(async () => {
+        if (!isSaving && document.visibilityState === 'visible') {
+          console.log("🔄 Автоматическая проверка обновлений");
+          await loadSchedule();
+        }
+      }, 60000);
+      
+      // При возвращении на вкладку
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+          console.log("📱 Страница активна, проверяем обновления");
+          loadSchedule();
+        }
+      });
+    }
+    
+    // ===== ЗАПУСК ПРИЛОЖЕНИЯ =====
+    
+    async function init() {
+      console.log("🚀 Запуск приложения...");
+      
+      await loadUser();
+      await loadSchedule(true); // Принудительная загрузка при старте
+      startAutoSync();
+      
+      // Обновляем время каждую минуту
+      setInterval(updateLastSyncTime, 60000);
+      
+      console.log("✅ Приложение запущено");
+    }
+    
+    // Запускаем когда страница загружена
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+    
+    // Глобальные функции для кнопок
+    window.forceRefresh = forceRefresh;
+    window.showSchedule = showSchedule;
+    window.showBookings = showBookings;
+    window.showSubjects = showSubjects;
+    window.toggleSlot = toggleSlot;
+  </script>
+</body>
+</html>
