@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Кабинет менеджера</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👔</text></svg>">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    body {
+      margin: 0;
+      background: #0d1117;
+      color: #c9d1d9;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    
+    .header {
+      background: #161b22;
+      padding: 16px;
+      border-bottom: 1px solid #30363d;
+    }
+    
+    .header-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    
+    .avatar {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      border: 3px solid #f85149;
+      background: #21262d;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+    }
+    
+    .refresh-btn {
+      background: #238636;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.2s;
+      white-space: nowrap;
+    }
+    
+    .refresh-btn:hover {
+      background: #2ea043;
+    }
+    
+    .content {
+      padding: 16px;
+      min-height: calc(100vh - 100px);
+    }
+    
+    .teacher-card {
+      background: #161b22;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      border: 1px solid #30363d;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .teacher-card:hover {
+      background: #21262d;
+      border-color: #58a6ff;
+      transform: translateY(-2px);
+    }
+    
+    .teacher-name {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: white;
+    }
+    
+    .teacher-stats {
+      display: flex;
+      gap: 16px;
+      font-size: 14px;
+      color: #8b949e;
+    }
+    
+    .back-btn {
+      background: #21262d;
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      cursor: pointer;
+      font-size: 14px;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: background 0.2s;
+    }
+    
+    .back-btn:hover {
+      background: #30363d;
+    }
+    
+    .tabs {
+      display: flex;
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      margin-bottom: 16px;
+    }
+    
+    .tab {
+      flex: 1;
+      padding: 12px;
+      text-align: center;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      user-select: none;
+    }
+    
+    .tab.active {
+      background: #1f6feb;
+      color: white;
+    }
+    
+    .section {
+      background: #161b22;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      border: 1px solid #30363d;
+    }
+    
+    .section-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: white;
+    }
+    
+    .add-student-btn {
+      background: #238636;
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      margin-top: 12px;
+      width: 100%;
+      transition: background 0.2s;
+    }
+    
+    .add-student-btn:hover {
+      background: #2ea043;
+    }
+    
+    .student-item {
+      background: #21262d;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .student-name {
+      font-weight: 500;
+    }
+    
+    .student-class {
+      font-size: 12px;
+      color: #8b949e;
+      margin-top: 4px;
+    }
+    
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.8);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    
+    .modal.active {
+      display: flex;
+    }
+    
+    .modal-content {
+      background: #161b22;
+      border-radius: 12px;
+      padding: 24px;
+      max-width: 400px;
+      width: 100%;
+      border: 1px solid #30363d;
+    }
+    
+    .modal-title {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: white;
+    }
+    
+    .form-group {
+      margin-bottom: 16px;
+    }
+    
+    .form-label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 14px;
+      color: #c9d1d9;
+    }
+    
+    .form-input {
+      width: 100%;
+      padding: 12px;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      color: white;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    
+    .form-input:focus {
+      outline: none;
+      border-color: #58a6ff;
+    }
+    
+    .form-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 20px;
+    }
+    
+    .btn {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .btn-primary {
+      background: #1f6feb;
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      background: #1565c0;
+    }
+    
+    .btn-secondary {
+      background: #21262d;
+      color: white;
+    }
+    
+    .btn-secondary:hover {
+      background: #30363d;
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 60px 20px;
+      color: #8b949e;
+      font-size: 16px;
+    }
+    
+    .error {
+      text-align: center;
+      padding: 60px 20px;
+      color: #da3633;
+    }
+    
+    .statistics-section {
+      background: #161b22;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      border: 1px solid #30363d;
+    }
+    
+    .date-filter {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    
+    .date-input {
+      flex: 1;
+      min-width: 140px;
+      padding: 10px;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      color: white;
+      font-size: 14px;
+    }
+    
+    .stat-summary {
+      background: #21262d;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    
+    .stat-item {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    
+    .stat-label {
+      color: #8b949e;
+    }
+    
+    .stat-value {
+      font-weight: 600;
+      color: white;
+    }
+    
+    .student-stat {
+      background: #21262d;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 8px;
+    }
+    
+    .student-stat-header {
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: white;
+    }
+    
+    .notice {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #1f6feb;
+      color: white;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      animation: slideIn 0.3s;
+      z-index: 1000;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+    
+    @keyframes slideIn {
+      from { transform: translateX(100px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    
+    .schedule-view {
+      overflow-x: auto;
+    }
+    
+    .schedule-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    
+    .schedule-table td {
+      padding: 4px;
+      text-align: center;
+      border: 1px solid #30363d;
+    }
+    
+    .schedule-slot {
+      width: 40px;
+      height: 30px;
+      border-radius: 4px;
+    }
+    
+    .slot-0 { background: #21262d; }
+    .slot-1 { background: #238636; }
+    .slot-2 { background: #da3633; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-top">
+      <div class="user-info">
+        <div class="avatar">👔</div>
+        <div>
+          <h3 id="userName">Загрузка...</h3>
+          <p>Кабинет менеджера</p>
+        </div>
+      </div>
+      <button class="refresh-btn" id="refreshBtn" onclick="loadTeachers()">
+        🔄 Обновить
+      </button>
+    </div>
+  </div>
+  
+  <div class="content" id="content">
+    <div class="loading">Загрузка преподавателей...</div>
+  </div>
+  
+  <!-- Модальное окно для добавления ученика -->
+  <div class="modal" id="addStudentModal">
+    <div class="modal-content">
+      <div class="modal-title">Добавить ученика</div>
+      <form id="addStudentForm" onsubmit="addStudent(event)">
+        <div class="form-group">
+          <label class="form-label">Имя *</label>
+          <input type="text" class="form-input" id="studentFirstName" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Фамилия *</label>
+          <input type="text" class="form-input" id="studentLastName" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Класс</label>
+          <input type="text" class="form-input" id="studentClass" placeholder="Например: 10А">
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" onclick="closeAddStudentModal()">Отмена</button>
+          <button type="submit" class="btn btn-primary">Добавить</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Telegram Web App
+    if (typeof Telegram !== 'undefined') {
+      Telegram.WebApp.ready();
+      Telegram.WebApp.expand();
+    }
+    
+    // Данные
+    let currentView = 'teachers'; // 'teachers' или 'teacher-detail'
+    let currentTeacherId = null;
+    let teachers = [];
+    let currentTeacherData = null;
+    
+    // Получить telegram_id из Telegram Web App
+    function getTelegramId() {
+      if (typeof Telegram !== 'undefined' && Telegram.WebApp && Telegram.WebApp.initDataUnsafe) {
+        const user = Telegram.WebApp.initDataUnsafe.user;
+        if (user && user.id) {
+          return user.id.toString();
+        }
+      }
+      // Fallback для разработки
+      return '913096324';
+    }
+    
+    const MY_TG_ID = getTelegramId();
+    
+    // Показать уведомление
+    function showNotice(message, type = 'success') {
+      const colors = {
+        success: '#238636',
+        error: '#da3633',
+        info: '#1f6feb'
+      };
+      
+      const notice = document.createElement('div');
+      notice.className = 'notice';
+      notice.style.background = colors[type] || colors.info;
+      notice.textContent = message;
+      document.body.appendChild(notice);
+      
+      setTimeout(() => {
+        notice.style.opacity = '0';
+        notice.style.transform = 'translateX(100px)';
+        setTimeout(() => document.body.removeChild(notice), 300);
+      }, 2000);
+    }
+    
+    // Загрузка пользователя
+    async function loadUser() {
+      try {
+        const response = await fetch(`/api/user?tgId=${MY_TG_ID}&t=${Date.now()}`);
+        const user = await response.json();
+        document.getElementById('userName').textContent = user.name || "Менеджер";
+      } catch (error) {
+        document.getElementById('userName').textContent = "Менеджер";
+      }
+    }
+    
+    // Загрузка списка преподавателей
+    async function loadTeachers() {
+      try {
+        document.getElementById('content').innerHTML = '<div class="loading">Загрузка преподавателей...</div>';
+        
+        const response = await fetch(`/api/manager/teachers?tgId=${MY_TG_ID}&t=${Date.now()}`);
+        const data = await response.json();
+        
+        teachers = data.teachers || [];
+        
+        if (teachers.length === 0) {
+          document.getElementById('content').innerHTML = `
+            <div class="loading">
+              Нет зарегистрированных преподавателей
+            </div>
+          `;
+          return;
+        }
+        
+        renderTeachersList();
+        
+      } catch (error) {
+        console.error('Ошибка загрузки преподавателей:', error);
+        document.getElementById('content').innerHTML = `
+          <div class="error">
+            Ошибка загрузки преподавателей
+            <br>
+            <button onclick="loadTeachers()" style="margin-top: 20px; padding: 10px 20px; background: #1f6feb; color: white; border: none; border-radius: 8px; cursor: pointer;">
+              Повторить
+            </button>
+          </div>
+        `;
+      }
+    }
+    
+    // Рендер списка преподавателей
+    function renderTeachersList() {
+      let html = '';
+      
+      teachers.forEach(teacher => {
+        html += `
+          <div class="teacher-card" onclick="showTeacherDetail(${teacher.id})">
+            <div class="teacher-name">
+              ${teacher.first_name} ${teacher.last_name || ''}
+            </div>
+            <div class="teacher-stats">
+              <span>👥 Учеников: ${teacher.students_count || 0}</span>
+            </div>
+          </div>
+        `;
+      });
+      
+      document.getElementById('content').innerHTML = html;
+      currentView = 'teachers';
+    }
+    
+    // Показать детали преподавателя
+    async function showTeacherDetail(teacherId) {
+      try {
+        currentTeacherId = teacherId;
+        currentView = 'teacher-detail';
+        
+        document.getElementById('content').innerHTML = '<div class="loading">Загрузка информации...</div>';
+        
+        const response = await fetch(`/api/manager/teacher/${teacherId}?tgId=${MY_TG_ID}&t=${Date.now()}`);
+        const data = await response.json();
+        
+        currentTeacherData = data;
+        renderTeacherDetail(data);
+        
+      } catch (error) {
+        console.error('Ошибка загрузки деталей преподавателя:', error);
+        showNotice('Ошибка загрузки информации', 'error');
+        loadTeachers();
+      }
+    }
+    
+    // Рендер деталей преподавателя
+    function renderTeacherDetail(data) {
+      const { teacher, schedule, subjects, students } = data;
+      
+      let html = `
+        <button class="back-btn" onclick="loadTeachers()">
+          <span style="font-size: 18px;">←</span>
+          Назад к списку преподавателей
+        </button>
+        
+        <div class="tabs">
+          <div class="tab active" onclick="showTeacherTab('info')">Информация</div>
+          <div class="tab" onclick="showTeacherTab('schedule')">Расписание</div>
+          <div class="tab" onclick="showTeacherTab('statistics')">Статистика</div>
+        </div>
+        
+        <div id="teacherTabContent">
+      `;
+      
+      // Вкладка информации
+      html += `
+        <div id="tab-info" class="tab-content">
+          <div class="section">
+            <div class="section-title">Преподаватель</div>
+            <div style="font-size: 18px; font-weight: 600; margin-bottom: 16px;">
+              ${teacher.first_name} ${teacher.last_name || ''}
+            </div>
+          </div>
+          
+          <div class="section">
+            <div class="section-title">Предметы</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+              ${subjects.length > 0 ? subjects.map(s => `
+                <span style="background: #21262d; padding: 6px 12px; border-radius: 6px; font-size: 14px;">
+                  ${s}
+                </span>
+              `).join('') : '<span style="color: #8b949e;">Предметы не указаны</span>'}
+            </div>
+          </div>
+          
+          <div class="section">
+            <div class="section-title">Ученики (${students.length})</div>
+            ${students.length > 0 ? students.map(s => `
+              <div class="student-item">
+                <div>
+                  <div class="student-name">${s.first_name} ${s.last_name || ''}</div>
+                  ${s.class_name ? `<div class="student-class">Класс: ${s.class_name}</div>` : ''}
+                </div>
+              </div>
+            `).join('') : '<div style="color: #8b949e; text-align: center; padding: 20px;">Нет учеников</div>'}
+            <button class="add-student-btn" onclick="openAddStudentModal()">
+              + Добавить ученика
+            </button>
+          </div>
+        </div>
+      `;
+      
+      // Вкладка расписания
+      html += `
+        <div id="tab-schedule" class="tab-content" style="display: none;">
+          <div class="section">
+            <div class="section-title">Расписание</div>
+            <div class="schedule-view">
+              ${renderScheduleView(schedule)}
+            </div>
+          </div>
+        </div>
+      `;
+      
+      // Вкладка статистики
+      html += `
+        <div id="tab-statistics" class="tab-content" style="display: none;">
+          <div class="statistics-section">
+            <div class="section-title">Период для расчета</div>
+            <div class="date-filter">
+              <input type="date" class="date-input" id="startDate" onchange="loadStatistics()">
+              <input type="date" class="date-input" id="endDate" onchange="loadStatistics()">
+            </div>
+            <div id="statisticsContent">
+              <div class="loading">Выберите период для просмотра статистики</div>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      html += `</div>`;
+      
+      document.getElementById('content').innerHTML = html;
+      
+      // Устанавливаем сегодняшнюю дату по умолчанию
+      const today = new Date();
+      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+      document.getElementById('startDate').value = firstDay.toISOString().split('T')[0];
+      document.getElementById('endDate').value = today.toISOString().split('T')[0];
+    }
+    
+    // Рендер расписания
+    function renderScheduleView(schedule) {
+      const DAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+      const FULL_DAYS = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
+      const TIMES = [];
+      for (let h = 8; h <= 22; h++) {
+        TIMES.push(`${h.toString().padStart(2, '0')}:00`);
+        if (h < 22) TIMES.push(`${h.toString().padStart(2, '0')}:30`);
+      }
+      
+      let html = '<table class="schedule-table"><thead><tr><th>Время</th>';
+      DAYS.forEach(d => html += `<th>${d}</th>`);
+      html += '</tr></thead><tbody>';
+      
+      TIMES.forEach(time => {
+        html += `<tr><td style="font-size: 10px; padding: 4px;">${time}</td>`;
+        DAYS.forEach((_, i) => {
+          const day = FULL_DAYS[i];
+          const state = schedule[day]?.[time] || 0;
+          html += `<td><div class="schedule-slot slot-${state}" title="${time} ${day}"></div></td>`;
+        });
+        html += '</tr>';
+      });
+      
+      html += '</tbody></table>';
+      
+      html += '<div style="margin-top: 16px; display: flex; gap: 16px; font-size: 12px;">';
+      html += '<div><div class="schedule-slot slot-0" style="display: inline-block; margin-right: 8px;"></div>Не работаю</div>';
+      html += '<div><div class="schedule-slot slot-1" style="display: inline-block; margin-right: 8px;"></div>Свободен</div>';
+      html += '<div><div class="schedule-slot slot-2" style="display: inline-block; margin-right: 8px;"></div>Занят</div>';
+      html += '</div>';
+      
+      return html;
+    }
+    
+    // Переключение вкладок
+    function showTeacherTab(tabName) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
+      
+      if (tabName === 'info') {
+        document.querySelectorAll('.tab')[0].classList.add('active');
+        document.getElementById('tab-info').style.display = 'block';
+      } else if (tabName === 'schedule') {
+        document.querySelectorAll('.tab')[1].classList.add('active');
+        document.getElementById('tab-schedule').style.display = 'block';
+      } else if (tabName === 'statistics') {
+        document.querySelectorAll('.tab')[2].classList.add('active');
+        document.getElementById('tab-statistics').style.display = 'block';
+        loadStatistics();
+      }
+    }
+    
+    // Загрузка статистики
+    async function loadStatistics() {
+      if (!currentTeacherId) return;
+      
+      const startDate = document.getElementById('startDate').value;
+      const endDate = document.getElementById('endDate').value;
+      
+      if (!startDate || !endDate) {
+        return;
+      }
+      
+      try {
+        document.getElementById('statisticsContent').innerHTML = '<div class="loading">Загрузка статистики...</div>';
+        
+        const response = await fetch(
+          `/api/manager/teacher/${currentTeacherId}/statistics?tgId=${MY_TG_ID}&start_date=${startDate}&end_date=${endDate}&t=${Date.now()}`
+        );
+        const data = await response.json();
+        
+        let html = `
+          <div class="stat-summary">
+            <div class="stat-item">
+              <span class="stat-label">Всего часов:</span>
+              <span class="stat-value">${data.total_hours || 0} ч</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Всего занятий:</span>
+              <span class="stat-value">${data.total_lessons || 0}</span>
+            </div>
+          </div>
+        `;
+        
+        if (data.by_student && data.by_student.length > 0) {
+          html += '<div class="section-title" style="margin-top: 16px;">По ученикам:</div>';
+          data.by_student.forEach(stat => {
+            html += `
+              <div class="student-stat">
+                <div class="student-stat-header">
+                  ${stat.student.first_name} ${stat.student.last_name || ''}
+                  ${stat.student.class_name ? `(${stat.student.class_name})` : ''}
+                </div>
+                <div style="font-size: 14px; color: #8b949e;">
+                  Занятий: ${stat.lessons_count} | Часов: ${stat.total_hours} ч
+                </div>
+              </div>
+            `;
+          });
+        } else {
+          html += '<div style="color: #8b949e; text-align: center; padding: 20px;">Нет данных за выбранный период</div>';
+        }
+        
+        document.getElementById('statisticsContent').innerHTML = html;
+        
+      } catch (error) {
+        console.error('Ошибка загрузки статистики:', error);
+        document.getElementById('statisticsContent').innerHTML = `
+          <div class="error">Ошибка загрузки статистики</div>
+        `;
+      }
+    }
+    
+    // Модальное окно для добавления ученика
+    function openAddStudentModal() {
+      document.getElementById('addStudentModal').classList.add('active');
+      document.getElementById('studentFirstName').focus();
+    }
+    
+    function closeAddStudentModal() {
+      document.getElementById('addStudentModal').classList.remove('active');
+      document.getElementById('addStudentForm').reset();
+    }
+    
+    async function addStudent(event) {
+      event.preventDefault();
+      
+      const firstName = document.getElementById('studentFirstName').value.trim();
+      const lastName = document.getElementById('studentLastName').value.trim();
+      const className = document.getElementById('studentClass').value.trim();
+      
+      try {
+        const response = await fetch(
+          `/api/manager/teacher/${currentTeacherId}/student?tgId=${MY_TG_ID}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              first_name: firstName,
+              last_name: lastName,
+              class_name: className || null
+            })
+          }
+        );
+        
+        const result = await response.json();
+        
+        if (response.ok && result.ok) {
+          showNotice('Ученик успешно добавлен', 'success');
+          closeAddStudentModal();
+          // Обновляем данные преподавателя
+          showTeacherDetail(currentTeacherId);
+        } else {
+          showNotice(result.error || 'Ошибка добавления ученика', 'error');
+        }
+        
+      } catch (error) {
+        console.error('Ошибка добавления ученика:', error);
+        showNotice('Ошибка добавления ученика', 'error');
+      }
+    }
+    
+    // Инициализация
+    async function init() {
+      await loadUser();
+      await loadTeachers();
+    }
+    
+    // Глобальные функции
+    window.loadTeachers = loadTeachers;
+    window.showTeacherDetail = showTeacherDetail;
+    window.showTeacherTab = showTeacherTab;
+    window.loadStatistics = loadStatistics;
+    window.openAddStudentModal = openAddStudentModal;
+    window.closeAddStudentModal = closeAddStudentModal;
+    window.addStudent = addStudent;
+    
+    // Запуск
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  </script>
+</body>
+</html>
+
