@@ -37,8 +37,20 @@ async function getUserByTelegramId(telegramId) {
     if (response.ok) {
       const users = await response.json();
       if (users.length > 0) {
-        return users[0];
+        const user = users[0];
+        console.log(`📥 Получен пользователь из Supabase:`, {
+          id: user.id,
+          telegram_id: user.telegram_id,
+          role: user.role,
+          approved: user.approved,
+          first_name: user.first_name,
+          last_name: user.last_name
+        });
+        return user;
       }
+    } else {
+      const errorText = await response.text();
+      console.error(`❌ Ошибка ответа Supabase: ${response.status} - ${errorText}`);
     }
     
     return null;
@@ -56,33 +68,44 @@ async function getUserId(telegramId) {
 
 // Получить telegram_id из запроса (из query параметра или заголовка)
 function getTelegramIdFromRequest(req) {
-  // Пробуем получить из query параметра (основной способ)
+  // Пробуем получить из query параметра
   if (req.query.tgId) {
-    console.log(`📱 Telegram ID из query: ${req.query.tgId}`);
-    return req.query.tgId;
+    console.log(`📱 Telegram ID из query.tgId: ${req.query.tgId}`);
+    return req.query.tgId.toString().trim();
   }
   
   // Пробуем получить из параметров маршрута
   if (req.params.tgId) {
-    console.log(`📱 Telegram ID из params: ${req.params.tgId}`);
-    return req.params.tgId;
+    console.log(`📱 Telegram ID из params.tgId: ${req.params.tgId}`);
+    return req.params.tgId.toString().trim();
   }
   
   // Пробуем получить из body
   if (req.body && req.body.tgId) {
-    console.log(`📱 Telegram ID из body: ${req.body.tgId}`);
-    return req.body.tgId;
+    console.log(`📱 Telegram ID из body.tgId: ${req.body.tgId}`);
+    return req.body.tgId.toString().trim();
   }
   
-  // Пробуем получить из заголовка (если Telegram Web App передает)
-  if (req.headers['x-telegram-user-id']) {
-    console.log(`📱 Telegram ID из заголовка: ${req.headers['x-telegram-user-id']}`);
-    return req.headers['x-telegram-user-id'];
+  // Пробуем получить из Telegram Web App initData (если есть)
+  if (req.query.initData) {
+    try {
+      const urlParams = new URLSearchParams(req.query.initData);
+      const userParam = urlParams.get('user');
+      if (userParam) {
+        const user = JSON.parse(decodeURIComponent(userParam));
+        if (user.id) {
+          console.log(`📱 Telegram ID из initData: ${user.id}`);
+          return user.id.toString();
+        }
+      }
+    } catch (e) {
+      console.warn('⚠️ Не удалось распарсить initData:', e.message);
+    }
   }
   
-  // Если ничего не найдено, возвращаем null (не fallback на админа!)
-  console.warn('⚠️ Telegram ID не найден в запросе');
-  return null;
+  // Fallback для разработки (можно удалить позже)
+  console.warn('⚠️ Telegram ID не найден в запросе, используем fallback');
+  return '913096324';
 }
 
 // ===== API =====
@@ -907,14 +930,6 @@ app.get('/api/init-db', async (req, res) => {
         success: true,
         message: "Пользователь уже существует",
         user_id: user.id,
-        user_data: {
-          id: user.id,
-          telegram_id: user.telegram_id,
-          first_name: user.first_name,
-          last_name: user.last_name,
-          role: user.role,
-          approved: user.approved
-        },
         _timestamp: Date.now()
       });
     }
@@ -934,43 +949,46 @@ app.get('/api/init-db', async (req, res) => {
   }
 });
 
-// Отладочный эндпоинт для проверки пользователя
+// ===== API ДЛЯ ОТЛАДКИ =====
+
+// Отладочный endpoint для проверки пользователя и роли
 app.get('/api/debug-user', async (req, res) => {
   try {
     const telegramId = getTelegramIdFromRequest(req);
-    const user = telegramId ? await getUserByTelegramId(telegramId) : null;
+    const user = await getUserByTelegramId(telegramId);
     
     const debugInfo = {
-      telegram_id_from_request: telegramId,
-      query_params: req.query,
-      headers_relevant: {
-        'x-telegram-user-id': req.headers['x-telegram-user-id'],
-        'user-agent': req.headers['user-agent']
-      },
+      telegramId: telegramId,
+      userFound: !!user,
       user: user ? {
         id: user.id,
         telegram_id: user.telegram_id,
+        role: user.role,
+        roleType: typeof user.role,
+        roleNormalized: user.role ? user.role.toString().trim().toLowerCase() : null,
+        approved: user.approved,
         first_name: user.first_name,
         last_name: user.last_name,
-        role: user.role,
-        role_type: typeof user.role,
-        role_length: user.role ? user.role.length : 0,
-        role_normalized: user.role ? user.role.trim().toLowerCase() : null,
-        approved: user.approved,
-        is_manager: user.role ? user.role.trim().toLowerCase() === 'manager' : false,
-        is_teacher: user.role ? user.role.trim().toLowerCase() === 'teacher' : false
+        isManager: user.role ? (
+          user.role.toString().trim().toLowerCase() === 'manager' ||
+          user.role.toString().toLowerCase().includes('manager')
+        ) : false
       } : null,
-      _timestamp: Date.now()
+      routingDecision: user ? (
+        (user.role && (
+          user.role.toString().trim().toLowerCase() === 'manager' ||
+          user.role.toString().toLowerCase().includes('manager')
+        )) ? 'manager.html' : 'index.html'
+      ) : 'index.html (user not found)',
+      timestamp: new Date().toISOString()
     };
     
-    console.log('🔍 DEBUG USER:', JSON.stringify(debugInfo, null, 2));
     res.json(debugInfo);
   } catch (error) {
-    console.error('❌ DEBUG ERROR:', error);
     res.json({
       error: error.message,
       stack: error.stack,
-      _timestamp: Date.now()
+      timestamp: new Date().toISOString()
     });
   }
 });
@@ -978,151 +996,26 @@ app.get('/api/debug-user', async (req, res) => {
 // ===== РОУТИНГ =====
 
 // Определение роли и редирект
-// ВАЖНО: этот маршрут должен быть ПЕРЕД app.get('*')
-// ВЕРСИЯ КОДА: v2.0 - с исправлением для менеджеров
 app.get('/', async (req, res) => {
-  // АГРЕССИВНО отключаем кеширование - ДО всех операций
-  res.set({
-    'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
-    'Pragma': 'no-cache',
-    'Expires': '0',
-    'ETag': '',
-    'Last-Modified': '',
-    'Vary': '*'
-  });
-  
-  // ЛОГИРОВАНИЕ В САМОМ НАЧАЛЕ - чтобы убедиться, что код выполняется
-  console.log('🚀 ===== ОБРАБОТЧИК ГЛАВНОЙ СТРАНИЦЫ ВЫЗВАН (v2.0) =====');
-  console.log('🔍 ===== НОВЫЙ ЗАПРОС К ГЛАВНОЙ СТРАНИЦЕ =====');
-  console.log('📋 Query параметры:', JSON.stringify(req.query, null, 2));
-  
   try {
-    console.log('📋 Headers:', JSON.stringify({
-      'user-agent': req.headers['user-agent'],
-      'referer': req.headers['referer'],
-      'x-telegram-user-id': req.headers['x-telegram-user-id']
-    }, null, 2));
-    
     const telegramId = getTelegramIdFromRequest(req);
-    console.log(`📱 Извлеченный Telegram ID: ${telegramId}`);
-    
-    // Если telegram_id не передан, показываем страницу-редиректор
-    if (!telegramId) {
-      console.warn('⚠️ Telegram ID не предоставлен в запросе, используем клиентский редирект');
-      return res.send(`
-        <!DOCTYPE html>
-        <html lang="ru">
-        <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Загрузка...</title>
-          <script src="https://telegram.org/js/telegram-web-app.js"></script>
-          <style>
-            body {
-              margin: 0;
-              background: #0d1117;
-              color: #c9d1d9;
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              min-height: 100vh;
-              padding: 20px;
-            }
-            .container {
-              text-align: center;
-              max-width: 400px;
-            }
-            .loading {
-              color: #58a6ff;
-              font-size: 18px;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="loading">⏳ Определение пользователя...</div>
-          </div>
-          <script>
-            (function() {
-              let telegramId = null;
-              
-              // Пробуем получить из URL параметра
-              const urlParams = new URLSearchParams(window.location.search);
-              telegramId = urlParams.get('tgId');
-              
-              // Если не нашли, пробуем получить из Telegram Web App API
-              if (!telegramId && typeof Telegram !== 'undefined' && Telegram.WebApp && Telegram.WebApp.initDataUnsafe) {
-                const user = Telegram.WebApp.initDataUnsafe.user;
-                if (user && user.id) {
-                  telegramId = user.id.toString();
-                }
-              }
-              
-              if (telegramId) {
-                // Просто редиректим с параметром tgId - сервер сам определит роль
-                // Добавляем timestamp для обхода кеша
-                window.location.href = '/?tgId=' + telegramId + '&_nocache=' + Date.now();
-              } else {
-                document.querySelector('.container').innerHTML = 
-                  '<h1 style="color: #da3633;">❌ Ошибка доступа</h1>' +
-                  '<p>Не удалось определить пользователя. Пожалуйста, откройте приложение через Telegram бота.</p>';
-              }
-            })();
-          </script>
-        </body>
-        </html>
-      `);
-    }
-    
-    console.log(`🔍 Поиск пользователя с telegram_id: ${telegramId}`);
+    console.log(`🔍 Проверка пользователя для роутинга: telegramId=${telegramId}`);
     const user = await getUserByTelegramId(telegramId);
     
     if (!user) {
-      console.warn(`⚠️ Пользователь с telegram_id ${telegramId} не найден в базе`);
-      return res.send(`
-        <!DOCTYPE html>
-        <html lang="ru">
-        <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Пользователь не найден</title>
-          <style>
-            body {
-              margin: 0;
-              background: #0d1117;
-              color: #c9d1d9;
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              min-height: 100vh;
-              padding: 20px;
-            }
-            .container {
-              text-align: center;
-              max-width: 400px;
-            }
-            h1 { color: #ffa500; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <h1>👤 Пользователь не найден</h1>
-            <p>Вы не зарегистрированы в системе. Пожалуйста, зарегистрируйтесь через Telegram бота.</p>
-          </div>
-        </body>
-        </html>
-      `);
+      console.log(`⚠️  Пользователь не найден, показываем интерфейс преподавателя (по умолчанию)`);
+      // Если пользователь не найден, показываем страницу для преподавателя (по умолчанию)
+      return res.sendFile(path.join(__dirname, 'public', 'index.html'));
     }
     
-    console.log(`✅ Пользователь найден:`);
-    console.log(`   - ID: ${user.id}`);
-    console.log(`   - Имя: ${user.first_name} ${user.last_name}`);
-    console.log(`   - Telegram ID: ${user.telegram_id}`);
-    console.log(`   - Роль: "${user.role}" (тип: ${typeof user.role})`);
-    console.log(`   - Approved: ${user.approved}`);
-    console.log(`   - Все поля пользователя:`, JSON.stringify(user, null, 2));
+    console.log(`👤 Пользователь найден: role=${user.role}, approved=${user.approved}`);
+    console.log(`🔍 Детали роли:`, {
+      raw: user.role,
+      type: typeof user.role,
+      isNull: user.role === null,
+      isUndefined: user.role === undefined,
+      length: user.role ? user.role.length : 0
+    });
     
     if (!user.approved) {
       // Если пользователь не одобрен
@@ -1162,58 +1055,37 @@ app.get('/', async (req, res) => {
       `);
     }
     
-    // Нормализуем роль (убираем пробелы, приводим к нижнему регистру)
-    const rawRole = (user.role || '').toString();
-    const normalizedRole = rawRole.trim().toLowerCase();
-    
-    console.log(`🎯 Редирект пользователя:`);
-    console.log(`   - Исходная роль (raw): "${rawRole}"`);
-    console.log(`   - Нормализованная роль: "${normalizedRole}"`);
-    console.log(`   - Длина роли: ${normalizedRole.length}`);
-    console.log(`   - Сравнение с 'manager': ${normalizedRole === 'manager'}`);
-    console.log(`   - Сравнение с 'teacher': ${normalizedRole === 'teacher'}`);
-    console.log(`   - Включает 'manager': ${normalizedRole.includes('manager')}`);
-    console.log(`   - Включает 'teacher': ${normalizedRole.includes('teacher')}`);
-    
     // Редиректим в зависимости от роли
-    // СТРОГАЯ ПРОВЕРКА: если роль содержит "manager" (в любом регистре), то это менеджер
-    const isManager = normalizedRole.includes('manager');
-    const isTeacher = normalizedRole.includes('teacher') || normalizedRole === '';
+    // Нормализуем роль: убираем пробелы, приводим к нижнему регистру
+    const rawRole = user.role ? user.role.toString() : '';
+    const normalizedRole = rawRole.trim().toLowerCase();
+    console.log(`🎯 Редирект: role="${rawRole}" -> normalized="${normalizedRole}" (тип: ${typeof user.role})`);
+    console.log(`📋 Полные данные пользователя:`, JSON.stringify({
+      id: user.id,
+      telegram_id: user.telegram_id,
+      role: user.role,
+      approved: user.approved,
+      first_name: user.first_name,
+      last_name: user.last_name
+    }, null, 2));
     
-    console.log(`🎯 ФИНАЛЬНОЕ РЕШЕНИЕ:`);
-    console.log(`   - isManager: ${isManager} (проверка: normalizedRole.includes('manager'))`);
-    console.log(`   - isTeacher: ${isTeacher}`);
-    console.log(`   - РЕШЕНИЕ: ${isManager ? 'МЕНЕДЖЕР -> manager.html' : 'УЧИТЕЛЬ -> index.html'}`);
+    // Проверяем, является ли пользователь менеджером
+    // Используем несколько проверок для надежности
+    const isManager = normalizedRole === 'manager' || 
+                      normalizedRole.includes('manager') ||
+                      rawRole.toLowerCase().includes('manager');
     
-    // ПРИОРИТЕТ: сначала проверяем менеджера
     if (isManager) {
-      console.log(`📄 ✅ ОТПРАВЛЯЕМ manager.html ДЛЯ МЕНЕДЖЕРА`);
-      console.log(`📄 Telegram ID: ${telegramId}`);
-      console.log(`📄 Путь к файлу: ${path.join(__dirname, 'public', 'manager.html')}`);
-      // АГРЕССИВНО отключаем кеш перед отправкой файла
-      res.set({
-        'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
-        'Pragma': 'no-cache',
-        'Expires': '0',
-        'ETag': '',
-        'Last-Modified': '',
-        'Vary': '*'
-      });
+      console.log(`✅ Редирект на manager.html (роль: "${rawRole}")`);
       return res.sendFile(path.join(__dirname, 'public', 'manager.html'));
-    } else if (isTeacher) {
-      console.log(`📄 ✅ ОТПРАВЛЯЕМ index.html ДЛЯ УЧИТЕЛЯ (роль: "${normalizedRole}")`);
-      console.log(`📄 Путь к файлу: ${path.join(__dirname, 'public', 'index.html')}`);
-      return res.sendFile(path.join(__dirname, 'public', 'index.html'));
     } else {
-      // Неизвестная роль - логируем и отправляем по умолчанию учителя
-      console.warn(`⚠️ Неизвестная роль: "${normalizedRole}", отправляем интерфейс учителя`);
-      console.log(`📄 Путь к файлу: ${path.join(__dirname, 'public', 'index.html')}`);
+      console.log(`✅ Редирект на index.html (преподаватель), т.к. role="${normalizedRole}"`);
       return res.sendFile(path.join(__dirname, 'public', 'index.html'));
     }
     
   } catch (error) {
-    console.error('❌ Ошибка роутинга:', error);
-    // По умолчанию показываем интерфейс преподавателя только если это не критическая ошибка
+    console.error('Ошибка роутинга:', error);
+    // По умолчанию показываем интерфейс преподавателя
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
   }
 });
@@ -1223,29 +1095,11 @@ app.get('/subjects.html', (req, res) => {
 });
 
 app.get('/manager.html', (req, res) => {
-  // АГРЕССИВНО отключаем кеширование для manager.html
-  res.set({
-    'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
-    'Pragma': 'no-cache',
-    'Expires': '0',
-    'ETag': '',
-    'Last-Modified': '',
-    'Vary': '*'
-  });
-  console.log(`📄 Запрос manager.html с tgId: ${req.query.tgId}`);
   res.sendFile(path.join(__dirname, 'public', 'manager.html'));
 });
 
-// Для всех остальных маршрутов (должен быть ПОСЛЕДНИМ!)
-// НЕ перехватываем запросы к /manager.html и другим файлам
+// Для всех остальных маршрутов
 app.get('*', (req, res) => {
-  // Пропускаем статические файлы и уже обработанные маршруты
-  if (req.path.startsWith('/api/') || 
-      req.path.startsWith('/manager.html') || 
-      req.path.startsWith('/subjects.html') ||
-      req.path.includes('.')) {
-    return res.status(404).send('Not found');
-  }
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
@@ -1256,5 +1110,5 @@ app.listen(port, () => {
   console.log(`👤 Telegram ID: 913096324`);
   console.log(`🔗 Проверка: http://localhost:${port}/api/status`);
   console.log(`🔗 Инициализация: http://localhost:${port}/api/init-db`);
+  console.log(`🔗 Отладка пользователя: http://localhost:${port}/api/debug-user?tgId=YOUR_TELEGRAM_ID`);
 });
-
