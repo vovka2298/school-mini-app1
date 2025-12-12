@@ -938,16 +938,38 @@ app.get('/api/init-db', async (req, res) => {
 app.get('/api/debug-user', async (req, res) => {
   try {
     const telegramId = getTelegramIdFromRequest(req);
+    const user = telegramId ? await getUserByTelegramId(telegramId) : null;
     
-    res.json({
+    const debugInfo = {
       telegram_id_from_request: telegramId,
       query_params: req.query,
-      user: telegramId ? await getUserByTelegramId(telegramId) : null,
+      headers_relevant: {
+        'x-telegram-user-id': req.headers['x-telegram-user-id'],
+        'user-agent': req.headers['user-agent']
+      },
+      user: user ? {
+        id: user.id,
+        telegram_id: user.telegram_id,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        role: user.role,
+        role_type: typeof user.role,
+        role_length: user.role ? user.role.length : 0,
+        role_normalized: user.role ? user.role.trim().toLowerCase() : null,
+        approved: user.approved,
+        is_manager: user.role ? user.role.trim().toLowerCase() === 'manager' : false,
+        is_teacher: user.role ? user.role.trim().toLowerCase() === 'teacher' : false
+      } : null,
       _timestamp: Date.now()
-    });
+    };
+    
+    console.log('🔍 DEBUG USER:', JSON.stringify(debugInfo, null, 2));
+    res.json(debugInfo);
   } catch (error) {
+    console.error('❌ DEBUG ERROR:', error);
     res.json({
       error: error.message,
+      stack: error.stack,
       _timestamp: Date.now()
     });
   }
@@ -958,6 +980,13 @@ app.get('/api/debug-user', async (req, res) => {
 // Определение роли и редирект
 app.get('/', async (req, res) => {
   try {
+    // Отключаем кеширование для главной страницы
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+    
     console.log('🔍 ===== НОВЫЙ ЗАПРОС К ГЛАВНОЙ СТРАНИЦЕ =====');
     console.log('📋 Query параметры:', JSON.stringify(req.query, null, 2));
     console.log('📋 Headers:', JSON.stringify({
@@ -1152,19 +1181,30 @@ app.get('/', async (req, res) => {
     
     // Редиректим в зависимости от роли
     // Проверяем строго на 'manager' (без 'pending_' и других префиксов)
-    if (normalizedRole === 'manager' || normalizedRole === 'pending_manager') {
+    const isManager = normalizedRole === 'manager' || normalizedRole === 'pending_manager';
+    const isTeacher = normalizedRole === 'teacher' || normalizedRole === 'pending_teacher' || normalizedRole === '';
+    
+    console.log(`🎯 ФИНАЛЬНОЕ РЕШЕНИЕ:`);
+    console.log(`   - isManager: ${isManager}`);
+    console.log(`   - isTeacher: ${isTeacher}`);
+    
+    if (isManager) {
       // Если роль 'pending_manager', это тоже менеджер, но не одобренный
       if (normalizedRole === 'pending_manager') {
         console.warn(`⚠️ Пользователь имеет роль 'pending_manager', но approved=${user.approved}`);
       }
-      console.log(`📄 ✅ Отправляем manager.html для менеджера`);
-      return res.sendFile(path.join(__dirname, 'public', 'manager.html'));
-    } else if (normalizedRole === 'teacher' || normalizedRole === 'pending_teacher' || normalizedRole === '') {
-      console.log(`📄 ✅ Отправляем index.html для учителя (роль: "${normalizedRole}")`);
+      console.log(`📄 ✅ РЕДИРЕКТИМ МЕНЕДЖЕРА НА /manager.html`);
+      console.log(`📄 Telegram ID: ${telegramId}`);
+      // Используем явный редирект вместо sendFile, чтобы обойти кеш Vercel
+      return res.redirect(`/manager.html?tgId=${telegramId}&_t=${Date.now()}`);
+    } else if (isTeacher) {
+      console.log(`📄 ✅ ОТПРАВЛЯЕМ index.html ДЛЯ УЧИТЕЛЯ (роль: "${normalizedRole}")`);
+      console.log(`📄 Путь к файлу: ${path.join(__dirname, 'public', 'index.html')}`);
       return res.sendFile(path.join(__dirname, 'public', 'index.html'));
     } else {
       // Неизвестная роль - логируем и отправляем по умолчанию учителя
       console.warn(`⚠️ Неизвестная роль: "${normalizedRole}", отправляем интерфейс учителя`);
+      console.log(`📄 Путь к файлу: ${path.join(__dirname, 'public', 'index.html')}`);
       return res.sendFile(path.join(__dirname, 'public', 'index.html'));
     }
     
@@ -1180,6 +1220,13 @@ app.get('/subjects.html', (req, res) => {
 });
 
 app.get('/manager.html', (req, res) => {
+  // Отключаем кеширование для manager.html
+  res.set({
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0'
+  });
+  console.log(`📄 Запрос manager.html с tgId: ${req.query.tgId}`);
   res.sendFile(path.join(__dirname, 'public', 'manager.html'));
 });
 
@@ -1196,3 +1243,4 @@ app.listen(port, () => {
   console.log(`🔗 Проверка: http://localhost:${port}/api/status`);
   console.log(`🔗 Инициализация: http://localhost:${port}/api/init-db`);
 });
+
