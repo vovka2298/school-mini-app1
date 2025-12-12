@@ -978,17 +978,25 @@ app.get('/api/debug-user', async (req, res) => {
 // ===== РОУТИНГ =====
 
 // Определение роли и редирект
+// ВАЖНО: этот маршрут должен быть ПЕРЕД app.get('*')
+// ВЕРСИЯ КОДА: v2.0 - с исправлением для менеджеров
 app.get('/', async (req, res) => {
+  // АГРЕССИВНО отключаем кеширование - ДО всех операций
+  res.set({
+    'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'ETag': '',
+    'Last-Modified': '',
+    'Vary': '*'
+  });
+  
+  // ЛОГИРОВАНИЕ В САМОМ НАЧАЛЕ - чтобы убедиться, что код выполняется
+  console.log('🚀 ===== ОБРАБОТЧИК ГЛАВНОЙ СТРАНИЦЫ ВЫЗВАН (v2.0) =====');
+  console.log('🔍 ===== НОВЫЙ ЗАПРОС К ГЛАВНОЙ СТРАНИЦЕ =====');
+  console.log('📋 Query параметры:', JSON.stringify(req.query, null, 2));
+  
   try {
-    // Отключаем кеширование для главной страницы
-    res.set({
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0'
-    });
-    
-    console.log('🔍 ===== НОВЫЙ ЗАПРОС К ГЛАВНОЙ СТРАНИЦЕ =====');
-    console.log('📋 Query параметры:', JSON.stringify(req.query, null, 2));
     console.log('📋 Headers:', JSON.stringify({
       'user-agent': req.headers['user-agent'],
       'referer': req.headers['referer'],
@@ -1053,6 +1061,7 @@ app.get('/', async (req, res) => {
               
               if (telegramId) {
                 // Просто редиректим с параметром tgId - сервер сам определит роль
+                // Добавляем timestamp для обхода кеша
                 window.location.href = '/?tgId=' + telegramId + '&_nocache=' + Date.now();
               } else {
                 document.querySelector('.container').innerHTML = 
@@ -1181,11 +1190,14 @@ app.get('/', async (req, res) => {
       console.log(`📄 ✅ ОТПРАВЛЯЕМ manager.html ДЛЯ МЕНЕДЖЕРА`);
       console.log(`📄 Telegram ID: ${telegramId}`);
       console.log(`📄 Путь к файлу: ${path.join(__dirname, 'public', 'manager.html')}`);
-      // Отправляем файл напрямую, НЕ редирект - это обходит кеш
+      // АГРЕССИВНО отключаем кеш перед отправкой файла
       res.set({
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
         'Pragma': 'no-cache',
-        'Expires': '0'
+        'Expires': '0',
+        'ETag': '',
+        'Last-Modified': '',
+        'Vary': '*'
       });
       return res.sendFile(path.join(__dirname, 'public', 'manager.html'));
     } else if (isTeacher) {
@@ -1211,11 +1223,14 @@ app.get('/subjects.html', (req, res) => {
 });
 
 app.get('/manager.html', (req, res) => {
-  // Отключаем кеширование для manager.html
+  // АГРЕССИВНО отключаем кеширование для manager.html
   res.set({
-    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
     'Pragma': 'no-cache',
-    'Expires': '0'
+    'Expires': '0',
+    'ETag': '',
+    'Last-Modified': '',
+    'Vary': '*'
   });
   console.log(`📄 Запрос manager.html с tgId: ${req.query.tgId}`);
   res.sendFile(path.join(__dirname, 'public', 'manager.html'));
