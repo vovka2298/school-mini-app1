@@ -278,6 +278,35 @@
       Telegram.WebApp.expand();
     }
     
+    // Проверка роли при загрузке страницы - если менеджер, перенаправляем
+    (async function checkRoleOnLoad() {
+      try {
+        function getTelegramIdFromURL() {
+          const params = new URLSearchParams(window.location.search);
+          if (params.get('tgId')) return params.get('tgId');
+          if (typeof Telegram !== 'undefined' && Telegram.WebApp && Telegram.WebApp.initDataUnsafe && Telegram.WebApp.initDataUnsafe.user) {
+            return Telegram.WebApp.initDataUnsafe.user.id.toString();
+          }
+          return null;
+        }
+        
+        const tgId = getTelegramIdFromURL();
+        if (tgId) {
+          const response = await fetch(`/api/user?tgId=${tgId}&t=${Date.now()}`);
+          const user = await response.json();
+          
+          // Если менеджер, сразу перенаправляем
+          if (user.role === 'manager' || (user.role && user.role.toLowerCase().includes('manager'))) {
+            console.log('⚠️ Обнаружен менеджер на странице преподавателя, перенаправляем на manager.html');
+            window.location.replace(`/manager.html?tgId=${tgId}`);
+            return;
+          }
+        }
+      } catch (error) {
+        console.error('Ошибка проверки роли при загрузке:', error);
+      }
+    })();
+    
     // Константы
     const DAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
     const FULL_DAYS = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
@@ -1004,8 +1033,24 @@
       try {
         const response = await fetch(`/api/user?tgId=${MY_ID}&t=${Date.now()}`);
         const user = await response.json();
+        
+        // Проверяем роль - если менеджер, перенаправляем на manager.html
+        if (user.role === 'manager' || (user.role && user.role.toLowerCase().includes('manager'))) {
+          console.log('⚠️ Менеджер попал на страницу преподавателя, перенаправляем...');
+          window.location.href = `/manager.html?tgId=${MY_ID}`;
+          return;
+        }
+        
+        // Проверяем роль - если менеджер, перенаправляем на manager.html
+        if (user.role === 'manager' || (user.role && user.role.toLowerCase().includes('manager'))) {
+          console.log('⚠️ Менеджер попал на страницу преподавателя, перенаправляем...');
+          window.location.href = `/manager.html?tgId=${MY_ID}`;
+          return;
+        }
+        
         document.getElementById('userName').textContent = user.name || "Преподаватель";
       } catch (error) {
+        console.error('Ошибка загрузки пользователя:', error);
         document.getElementById('userName').textContent = "Преподаватель";
       }
     }
