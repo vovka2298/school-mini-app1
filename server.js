@@ -678,20 +678,27 @@ app.post('/api/manager/teacher/:teacherId/student', requireAuth, async (req, res
     const { teacherId } = req.params;
     const { first_name, last_name, class_name } = req.body;
     
-    if (!first_name || !last_name) {
-      return res.status(400).json({ error: 'Необходимо указать имя и фамилию', _timestamp: Date.now() });
+    if (!first_name || first_name.trim().length === 0) {
+      return res.status(400).json({ error: 'Необходимо указать имя', _timestamp: Date.now() });
     }
     
     // Создаем или находим ученика
     const studentData = {
       first_name: first_name.trim(),
-      last_name: last_name.trim(),
+      last_name: last_name ? last_name.trim() : null,
       class_name: class_name ? class_name.trim() : null
     };
     
-    // Проверяем, существует ли уже такой ученик
+    // Проверяем, существует ли уже такой ученик (только по имени, если фамилии нет)
+    let existingQuery = `first_name=eq.${studentData.first_name}`;
+    if (studentData.last_name) {
+      existingQuery += `&last_name=eq.${studentData.last_name}`;
+    } else {
+      existingQuery += `&last_name=is.null`;
+    }
+    
     const existingResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/students?first_name=eq.${studentData.first_name}&last_name=eq.${studentData.last_name}&select=id`,
+      `${SUPABASE_URL}/rest/v1/students?${existingQuery}&select=id`,
       { headers: createHeaders() }
     );
     const existing = existingResponse.ok ? await existingResponse.json() : [];
@@ -889,11 +896,45 @@ app.post('/api/lesson', requireAuth, async (req, res) => {
       throw new Error(`Ошибка создания занятия: ${errorText}`);
     }
     
-    const newLesson = await response.json();
+    // Supabase с return=minimal может вернуть пустой ответ
+    const responseText = await response.text();
+    let newLesson = null;
+    
+    if (responseText && responseText.trim().length > 0) {
+      try {
+        newLesson = JSON.parse(responseText);
+      } catch (e) {
+        console.warn('⚠️ Не удалось распарсить ответ от Supabase, но занятие создано');
+        // Пытаемся получить созданное занятие из базы
+        const checkResponse = await fetch(
+          `${SUPABASE_URL}/rest/v1/lessons?teacher_id=eq.${req.user.id}&student_id=eq.${student_id}&lesson_date=eq.${lesson_date}&order=created_at.desc&limit=1&select=*`,
+          { headers: createHeaders() }
+        );
+        if (checkResponse.ok) {
+          const lessons = await checkResponse.json();
+          if (lessons.length > 0) {
+            newLesson = lessons[0];
+          }
+        }
+      }
+    } else {
+      // Пустой ответ - пытаемся получить созданное занятие
+      console.log('ℹ️ Пустой ответ от Supabase, получаем созданное занятие...');
+      const checkResponse = await fetch(
+        `${SUPABASE_URL}/rest/v1/lessons?teacher_id=eq.${req.user.id}&student_id=eq.${student_id}&lesson_date=eq.${lesson_date}&order=created_at.desc&limit=1&select=*`,
+        { headers: createHeaders() }
+      );
+      if (checkResponse.ok) {
+        const lessons = await checkResponse.json();
+        if (lessons.length > 0) {
+          newLesson = lessons[0];
+        }
+      }
+    }
     
     res.json({
       ok: true,
-      lesson: newLesson[0] || newLesson,
+      lesson: newLesson ? (newLesson[0] || newLesson) : null,
       message: 'Занятие успешно добавлено',
       _timestamp: Date.now()
     });
