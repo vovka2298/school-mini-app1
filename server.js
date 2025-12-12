@@ -56,23 +56,33 @@ async function getUserId(telegramId) {
 
 // Получить telegram_id из запроса (из query параметра или заголовка)
 function getTelegramIdFromRequest(req) {
-  // Пробуем получить из query параметра
+  // Пробуем получить из query параметра (основной способ)
   if (req.query.tgId) {
+    console.log(`📱 Telegram ID из query: ${req.query.tgId}`);
     return req.query.tgId;
   }
   
   // Пробуем получить из параметров маршрута
   if (req.params.tgId) {
+    console.log(`📱 Telegram ID из params: ${req.params.tgId}`);
     return req.params.tgId;
   }
   
   // Пробуем получить из body
   if (req.body && req.body.tgId) {
+    console.log(`📱 Telegram ID из body: ${req.body.tgId}`);
     return req.body.tgId;
   }
   
-  // Fallback для разработки (можно удалить позже)
-  return '913096324';
+  // Пробуем получить из заголовка (если Telegram Web App передает)
+  if (req.headers['x-telegram-user-id']) {
+    console.log(`📱 Telegram ID из заголовка: ${req.headers['x-telegram-user-id']}`);
+    return req.headers['x-telegram-user-id'];
+  }
+  
+  // Если ничего не найдено, возвращаем null (не fallback на админа!)
+  console.warn('⚠️ Telegram ID не найден в запросе');
+  return null;
 }
 
 // ===== API =====
@@ -922,12 +932,88 @@ app.get('/api/init-db', async (req, res) => {
 app.get('/', async (req, res) => {
   try {
     const telegramId = getTelegramIdFromRequest(req);
+    
+    // Если telegram_id не передан, показываем сообщение об ошибке
+    if (!telegramId) {
+      console.warn('⚠️ Telegram ID не предоставлен в запросе');
+      return res.send(`
+        <!DOCTYPE html>
+        <html lang="ru">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Ошибка доступа</title>
+          <style>
+            body {
+              margin: 0;
+              background: #0d1117;
+              color: #c9d1d9;
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              min-height: 100vh;
+              padding: 20px;
+            }
+            .container {
+              text-align: center;
+              max-width: 400px;
+            }
+            h1 { color: #da3633; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>❌ Ошибка доступа</h1>
+            <p>Не удалось определить пользователя. Пожалуйста, откройте приложение через Telegram бота.</p>
+          </div>
+        </body>
+        </html>
+      `);
+    }
+    
+    console.log(`🔍 Поиск пользователя с telegram_id: ${telegramId}`);
     const user = await getUserByTelegramId(telegramId);
     
     if (!user) {
-      // Если пользователь не найден, показываем страницу для преподавателя (по умолчанию)
-      return res.sendFile(path.join(__dirname, 'public', 'index.html'));
+      console.warn(`⚠️ Пользователь с telegram_id ${telegramId} не найден в базе`);
+      return res.send(`
+        <!DOCTYPE html>
+        <html lang="ru">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Пользователь не найден</title>
+          <style>
+            body {
+              margin: 0;
+              background: #0d1117;
+              color: #c9d1d9;
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              min-height: 100vh;
+              padding: 20px;
+            }
+            .container {
+              text-align: center;
+              max-width: 400px;
+            }
+            h1 { color: #ffa500; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>👤 Пользователь не найден</h1>
+            <p>Вы не зарегистрированы в системе. Пожалуйста, зарегистрируйтесь через Telegram бота.</p>
+          </div>
+        </body>
+        </html>
+      `);
     }
+    
+    console.log(`✅ Пользователь найден: ${user.first_name} ${user.last_name}, роль: ${user.role}, approved: ${user.approved}`);
     
     if (!user.approved) {
       // Если пользователь не одобрен
@@ -968,15 +1054,18 @@ app.get('/', async (req, res) => {
     }
     
     // Редиректим в зависимости от роли
+    console.log(`🎯 Редирект пользователя с ролью: ${user.role}`);
     if (user.role === 'manager') {
+      console.log(`📄 Отправляем manager.html для менеджера`);
       return res.sendFile(path.join(__dirname, 'public', 'manager.html'));
     } else {
+      console.log(`📄 Отправляем index.html для учителя`);
       return res.sendFile(path.join(__dirname, 'public', 'index.html'));
     }
     
   } catch (error) {
-    console.error('Ошибка роутинга:', error);
-    // По умолчанию показываем интерфейс преподавателя
+    console.error('❌ Ошибка роутинга:', error);
+    // По умолчанию показываем интерфейс преподавателя только если это не критическая ошибка
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
   }
 });
