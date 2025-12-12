@@ -1052,21 +1052,8 @@ app.get('/', async (req, res) => {
               }
               
               if (telegramId) {
-                // Делаем запрос к API для определения роли
-                fetch('/api/user?tgId=' + telegramId + '&t=' + Date.now())
-                  .then(response => response.json())
-                  .then(data => {
-                    if (data.role === 'manager') {
-                      window.location.href = '/manager.html?tgId=' + telegramId;
-                    } else {
-                      window.location.href = '/?tgId=' + telegramId;
-                    }
-                  })
-                  .catch(error => {
-                    console.error('Ошибка:', error);
-                    // Пробуем редирект по умолчанию
-                    window.location.href = '/?tgId=' + telegramId;
-                  });
+                // Просто редиректим с параметром tgId - сервер сам определит роль
+                window.location.href = '/?tgId=' + telegramId + '&_nocache=' + Date.now();
               } else {
                 document.querySelector('.container').innerHTML = 
                   '<h1 style="color: #da3633;">❌ Ошибка доступа</h1>' +
@@ -1180,23 +1167,27 @@ app.get('/', async (req, res) => {
     console.log(`   - Включает 'teacher': ${normalizedRole.includes('teacher')}`);
     
     // Редиректим в зависимости от роли
-    // Проверяем строго на 'manager' (без 'pending_' и других префиксов)
-    const isManager = normalizedRole === 'manager' || normalizedRole === 'pending_manager';
-    const isTeacher = normalizedRole === 'teacher' || normalizedRole === 'pending_teacher' || normalizedRole === '';
+    // СТРОГАЯ ПРОВЕРКА: если роль содержит "manager" (в любом регистре), то это менеджер
+    const isManager = normalizedRole.includes('manager');
+    const isTeacher = normalizedRole.includes('teacher') || normalizedRole === '';
     
     console.log(`🎯 ФИНАЛЬНОЕ РЕШЕНИЕ:`);
-    console.log(`   - isManager: ${isManager}`);
+    console.log(`   - isManager: ${isManager} (проверка: normalizedRole.includes('manager'))`);
     console.log(`   - isTeacher: ${isTeacher}`);
+    console.log(`   - РЕШЕНИЕ: ${isManager ? 'МЕНЕДЖЕР -> manager.html' : 'УЧИТЕЛЬ -> index.html'}`);
     
+    // ПРИОРИТЕТ: сначала проверяем менеджера
     if (isManager) {
-      // Если роль 'pending_manager', это тоже менеджер, но не одобренный
-      if (normalizedRole === 'pending_manager') {
-        console.warn(`⚠️ Пользователь имеет роль 'pending_manager', но approved=${user.approved}`);
-      }
-      console.log(`📄 ✅ РЕДИРЕКТИМ МЕНЕДЖЕРА НА /manager.html`);
+      console.log(`📄 ✅ ОТПРАВЛЯЕМ manager.html ДЛЯ МЕНЕДЖЕРА`);
       console.log(`📄 Telegram ID: ${telegramId}`);
-      // Используем явный редирект вместо sendFile, чтобы обойти кеш Vercel
-      return res.redirect(`/manager.html?tgId=${telegramId}&_t=${Date.now()}`);
+      console.log(`📄 Путь к файлу: ${path.join(__dirname, 'public', 'manager.html')}`);
+      // Отправляем файл напрямую, НЕ редирект - это обходит кеш
+      res.set({
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      });
+      return res.sendFile(path.join(__dirname, 'public', 'manager.html'));
     } else if (isTeacher) {
       console.log(`📄 ✅ ОТПРАВЛЯЕМ index.html ДЛЯ УЧИТЕЛЯ (роль: "${normalizedRole}")`);
       console.log(`📄 Путь к файлу: ${path.join(__dirname, 'public', 'index.html')}`);
@@ -1230,8 +1221,16 @@ app.get('/manager.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'manager.html'));
 });
 
-// Для всех остальных маршрутов
+// Для всех остальных маршрутов (должен быть ПОСЛЕДНИМ!)
+// НЕ перехватываем запросы к /manager.html и другим файлам
 app.get('*', (req, res) => {
+  // Пропускаем статические файлы и уже обработанные маршруты
+  if (req.path.startsWith('/api/') || 
+      req.path.startsWith('/manager.html') || 
+      req.path.startsWith('/subjects.html') ||
+      req.path.includes('.')) {
+    return res.status(404).send('Not found');
+  }
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
