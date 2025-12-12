@@ -907,6 +907,14 @@ app.get('/api/init-db', async (req, res) => {
         success: true,
         message: "Пользователь уже существует",
         user_id: user.id,
+        user_data: {
+          id: user.id,
+          telegram_id: user.telegram_id,
+          first_name: user.first_name,
+          last_name: user.last_name,
+          role: user.role,
+          approved: user.approved
+        },
         _timestamp: Date.now()
       });
     }
@@ -926,23 +934,52 @@ app.get('/api/init-db', async (req, res) => {
   }
 });
 
+// Отладочный эндпоинт для проверки пользователя
+app.get('/api/debug-user', async (req, res) => {
+  try {
+    const telegramId = getTelegramIdFromRequest(req);
+    
+    res.json({
+      telegram_id_from_request: telegramId,
+      query_params: req.query,
+      user: telegramId ? await getUserByTelegramId(telegramId) : null,
+      _timestamp: Date.now()
+    });
+  } catch (error) {
+    res.json({
+      error: error.message,
+      _timestamp: Date.now()
+    });
+  }
+});
+
 // ===== РОУТИНГ =====
 
 // Определение роли и редирект
 app.get('/', async (req, res) => {
   try {
-    const telegramId = getTelegramIdFromRequest(req);
+    console.log('🔍 ===== НОВЫЙ ЗАПРОС К ГЛАВНОЙ СТРАНИЦЕ =====');
+    console.log('📋 Query параметры:', JSON.stringify(req.query, null, 2));
+    console.log('📋 Headers:', JSON.stringify({
+      'user-agent': req.headers['user-agent'],
+      'referer': req.headers['referer'],
+      'x-telegram-user-id': req.headers['x-telegram-user-id']
+    }, null, 2));
     
-    // Если telegram_id не передан, показываем сообщение об ошибке
+    const telegramId = getTelegramIdFromRequest(req);
+    console.log(`📱 Извлеченный Telegram ID: ${telegramId}`);
+    
+    // Если telegram_id не передан, показываем страницу-редиректор
     if (!telegramId) {
-      console.warn('⚠️ Telegram ID не предоставлен в запросе');
+      console.warn('⚠️ Telegram ID не предоставлен в запросе, используем клиентский редирект');
       return res.send(`
         <!DOCTYPE html>
         <html lang="ru">
         <head>
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Ошибка доступа</title>
+          <title>Загрузка...</title>
+          <script src="https://telegram.org/js/telegram-web-app.js"></script>
           <style>
             body {
               margin: 0;
@@ -959,14 +996,55 @@ app.get('/', async (req, res) => {
               text-align: center;
               max-width: 400px;
             }
-            h1 { color: #da3633; }
+            .loading {
+              color: #58a6ff;
+              font-size: 18px;
+            }
           </style>
         </head>
         <body>
           <div class="container">
-            <h1>❌ Ошибка доступа</h1>
-            <p>Не удалось определить пользователя. Пожалуйста, откройте приложение через Telegram бота.</p>
+            <div class="loading">⏳ Определение пользователя...</div>
           </div>
+          <script>
+            (function() {
+              let telegramId = null;
+              
+              // Пробуем получить из URL параметра
+              const urlParams = new URLSearchParams(window.location.search);
+              telegramId = urlParams.get('tgId');
+              
+              // Если не нашли, пробуем получить из Telegram Web App API
+              if (!telegramId && typeof Telegram !== 'undefined' && Telegram.WebApp && Telegram.WebApp.initDataUnsafe) {
+                const user = Telegram.WebApp.initDataUnsafe.user;
+                if (user && user.id) {
+                  telegramId = user.id.toString();
+                }
+              }
+              
+              if (telegramId) {
+                // Делаем запрос к API для определения роли
+                fetch('/api/user?tgId=' + telegramId + '&t=' + Date.now())
+                  .then(response => response.json())
+                  .then(data => {
+                    if (data.role === 'manager') {
+                      window.location.href = '/manager.html?tgId=' + telegramId;
+                    } else {
+                      window.location.href = '/?tgId=' + telegramId;
+                    }
+                  })
+                  .catch(error => {
+                    console.error('Ошибка:', error);
+                    // Пробуем редирект по умолчанию
+                    window.location.href = '/?tgId=' + telegramId;
+                  });
+              } else {
+                document.querySelector('.container').innerHTML = 
+                  '<h1 style="color: #da3633;">❌ Ошибка доступа</h1>' +
+                  '<p>Не удалось определить пользователя. Пожалуйста, откройте приложение через Telegram бота.</p>';
+              }
+            })();
+          </script>
         </body>
         </html>
       `);
@@ -1013,7 +1091,13 @@ app.get('/', async (req, res) => {
       `);
     }
     
-    console.log(`✅ Пользователь найден: ${user.first_name} ${user.last_name}, роль: ${user.role}, approved: ${user.approved}`);
+    console.log(`✅ Пользователь найден:`);
+    console.log(`   - ID: ${user.id}`);
+    console.log(`   - Имя: ${user.first_name} ${user.last_name}`);
+    console.log(`   - Telegram ID: ${user.telegram_id}`);
+    console.log(`   - Роль: "${user.role}" (тип: ${typeof user.role})`);
+    console.log(`   - Approved: ${user.approved}`);
+    console.log(`   - Все поля пользователя:`, JSON.stringify(user, null, 2));
     
     if (!user.approved) {
       // Если пользователь не одобрен
@@ -1053,13 +1137,34 @@ app.get('/', async (req, res) => {
       `);
     }
     
+    // Нормализуем роль (убираем пробелы, приводим к нижнему регистру)
+    const rawRole = (user.role || '').toString();
+    const normalizedRole = rawRole.trim().toLowerCase();
+    
+    console.log(`🎯 Редирект пользователя:`);
+    console.log(`   - Исходная роль (raw): "${rawRole}"`);
+    console.log(`   - Нормализованная роль: "${normalizedRole}"`);
+    console.log(`   - Длина роли: ${normalizedRole.length}`);
+    console.log(`   - Сравнение с 'manager': ${normalizedRole === 'manager'}`);
+    console.log(`   - Сравнение с 'teacher': ${normalizedRole === 'teacher'}`);
+    console.log(`   - Включает 'manager': ${normalizedRole.includes('manager')}`);
+    console.log(`   - Включает 'teacher': ${normalizedRole.includes('teacher')}`);
+    
     // Редиректим в зависимости от роли
-    console.log(`🎯 Редирект пользователя с ролью: ${user.role}`);
-    if (user.role === 'manager') {
-      console.log(`📄 Отправляем manager.html для менеджера`);
+    // Проверяем строго на 'manager' (без 'pending_' и других префиксов)
+    if (normalizedRole === 'manager' || normalizedRole === 'pending_manager') {
+      // Если роль 'pending_manager', это тоже менеджер, но не одобренный
+      if (normalizedRole === 'pending_manager') {
+        console.warn(`⚠️ Пользователь имеет роль 'pending_manager', но approved=${user.approved}`);
+      }
+      console.log(`📄 ✅ Отправляем manager.html для менеджера`);
       return res.sendFile(path.join(__dirname, 'public', 'manager.html'));
+    } else if (normalizedRole === 'teacher' || normalizedRole === 'pending_teacher' || normalizedRole === '') {
+      console.log(`📄 ✅ Отправляем index.html для учителя (роль: "${normalizedRole}")`);
+      return res.sendFile(path.join(__dirname, 'public', 'index.html'));
     } else {
-      console.log(`📄 Отправляем index.html для учителя`);
+      // Неизвестная роль - логируем и отправляем по умолчанию учителя
+      console.warn(`⚠️ Неизвестная роль: "${normalizedRole}", отправляем интерфейс учителя`);
       return res.sendFile(path.join(__dirname, 'public', 'index.html'));
     }
     
