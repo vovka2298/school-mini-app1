@@ -865,8 +865,73 @@
         window.lessonsStudents = students;
         window.lessonsSubjects = subjects;
         
-        // Здесь можно добавить загрузку списка проведенных занятий
-        // Пока просто показываем форму добавления
+        // Загружаем список проведенных занятий
+        try {
+          const lessonsResponse = await fetch(`/api/teacher/lessons?tgId=${MY_ID}&t=${Date.now()}`);
+          const lessonsData = await lessonsResponse.json();
+          const lessons = lessonsData.lessons || [];
+          
+          const studentsMap = {};
+          students.forEach(s => { studentsMap[s.id] = s; });
+          
+          if (lessons.length === 0) {
+            document.getElementById('lessonsList').innerHTML = `
+              <div style="color: #8b949e; text-align: center; padding: 40px;">
+                Нет проведенных занятий
+              </div>
+            `;
+          } else {
+            let lessonsHtml = '';
+            lessons.forEach(lesson => {
+              const student = lesson.student || studentsMap[lesson.student_id];
+              const studentName = student ? `${student.first_name || ''} ${student.last_name || ''}`.trim() : 'Неизвестный ученик';
+              const duration = lesson.duration_minutes || 0;
+              const hours = Math.floor(duration / 60);
+              const minutes = duration % 60;
+              const durationText = hours > 0 ? `${hours}ч ${minutes}м` : `${minutes}м`;
+              
+              lessonsHtml += `
+                <div style="
+                  background: #161b22;
+                  border-radius: 12px;
+                  padding: 16px;
+                  margin-bottom: 12px;
+                  border-left: 4px solid #238636;
+                ">
+                  <div style="display: flex; justify-content: space-between; align-items: start;">
+                    <div style="flex: 1;">
+                      <strong style="font-size: 16px;">${studentName}</strong>
+                      <div style="font-size: 14px; color: #8b949e; margin-top: 8px;">
+                        📅 ${new Date(lesson.lesson_date).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                      </div>
+                      <div style="font-size: 14px; color: #8b949e; margin-top: 4px;">
+                        ⏰ ${lesson.start_time} - ${lesson.end_time} (${durationText})
+                      </div>
+                      ${lesson.subject ? `
+                        <div style="font-size: 14px; color: #58a6ff; margin-top: 4px;">
+                          📚 ${lesson.subject}
+                        </div>
+                      ` : ''}
+                      ${lesson.notes ? `
+                        <div style="font-size: 13px; color: #8b949e; margin-top: 8px; padding-top: 8px; border-top: 1px solid #30363d;">
+                          ${lesson.notes}
+                        </div>
+                      ` : ''}
+                    </div>
+                  </div>
+                </div>
+              `;
+            });
+            document.getElementById('lessonsList').innerHTML = lessonsHtml;
+          }
+        } catch (lessonsError) {
+          console.error('Ошибка загрузки занятий:', lessonsError);
+          document.getElementById('lessonsList').innerHTML = `
+            <div style="color: #da3633; text-align: center; padding: 40px;">
+              Ошибка загрузки занятий
+            </div>
+          `;
+        }
         
       } catch (error) {
         console.error('Ошибка загрузки данных:', error);
