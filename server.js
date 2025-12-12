@@ -872,6 +872,16 @@ app.post('/api/lesson', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Ученик не найден у этого преподавателя', _timestamp: Date.now() });
     }
     
+    // Вычисляем длительность занятия в минутах
+    function timeToMinutes(timeStr) {
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      return hours * 60 + minutes;
+    }
+    
+    const startMinutes = timeToMinutes(start_time);
+    const endMinutes = timeToMinutes(end_time);
+    const duration_minutes = endMinutes > startMinutes ? endMinutes - startMinutes : (24 * 60) - startMinutes + endMinutes;
+    
     const lessonData = {
       teacher_id: req.user.id,
       student_id: parseInt(student_id),
@@ -879,6 +889,7 @@ app.post('/api/lesson', requireAuth, async (req, res) => {
       lesson_date: lesson_date,
       start_time: start_time,
       end_time: end_time,
+      duration_minutes: duration_minutes,
       notes: notes || null
     };
     
@@ -977,6 +988,63 @@ app.get('/api/teacher/students', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('❌ Ошибка получения учеников:', error);
     res.json({ students: [], _timestamp: Date.now() });
+  }
+});
+
+// 18. Получить список занятий преподавателя
+app.get('/api/teacher/lessons', requireAuth, async (req, res) => {
+  try {
+    if (req.user.role !== 'teacher') {
+      return res.status(403).json({ error: 'Доступ запрещен', _timestamp: Date.now() });
+    }
+    
+    const { start_date, end_date } = req.query;
+    let query = `teacher_id=eq.${req.user.id}`;
+    
+    if (start_date) {
+      query += `&lesson_date=gte.${start_date}`;
+    }
+    if (end_date) {
+      query += `&lesson_date=lte.${end_date}`;
+    }
+    
+    // Получаем занятия
+    const lessonsResponse = await fetch(
+      `${SUPABASE_URL}/rest/v1/lessons?${query}&order=lesson_date.desc,start_time.desc&select=*`,
+      { headers: createHeaders() }
+    );
+    const lessons = lessonsResponse.ok ? await lessonsResponse.json() : [];
+    
+    // Получаем информацию об учениках
+    const studentIds = [...new Set(lessons.map(l => l.student_id))];
+    let students = [];
+    if (studentIds.length > 0) {
+      const studentsResponse = await fetch(
+        `${SUPABASE_URL}/rest/v1/students?id=in.(${studentIds.join(',')})&select=*`,
+        { headers: createHeaders() }
+      );
+      students = studentsResponse.ok ? await studentsResponse.json() : [];
+    }
+    
+    const studentsMap = {};
+    students.forEach(student => {
+      studentsMap[student.id] = student;
+    });
+    
+    // Объединяем занятия с информацией об учениках
+    const lessonsWithStudents = lessons.map(lesson => ({
+      ...lesson,
+      student: studentsMap[lesson.student_id] || { id: lesson.student_id, first_name: 'Неизвестно', last_name: '' }
+    }));
+    
+    res.json({
+      lessons: lessonsWithStudents,
+      _timestamp: Date.now()
+    });
+    
+  } catch (error) {
+    console.error('❌ Ошибка получения занятий:', error);
+    res.json({ lessons: [], _timestamp: Date.now() });
   }
 });
 
