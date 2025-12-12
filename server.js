@@ -683,22 +683,19 @@ app.post('/api/manager/teacher/:teacherId/student', requireAuth, async (req, res
     }
     
     // Создаем или находим ученика
-    const studentData = {};
-    studentData.first_name = first_name.trim();
-    if (last_name && last_name.trim().length > 0) {
-      studentData.last_name = last_name.trim();
-    }
-    // Если class_name указан, добавляем его
-    if (class_name && class_name.trim().length > 0) {
-      studentData.class_name = class_name.trim();
-    }
+    // В базе данных last_name имеет NOT NULL constraint, поэтому передаем пустую строку вместо null
+    const studentData = {
+      first_name: first_name.trim(),
+      last_name: (last_name && last_name.trim().length > 0) ? last_name.trim() : '',
+      class_name: (class_name && class_name.trim().length > 0) ? class_name.trim() : null
+    };
     
     // Проверяем, существует ли уже такой ученик (только по имени, если фамилии нет)
     let existingQuery = `first_name=eq.${encodeURIComponent(studentData.first_name)}`;
-    if (studentData.last_name) {
+    if (studentData.last_name && studentData.last_name.length > 0) {
       existingQuery += `&last_name=eq.${encodeURIComponent(studentData.last_name)}`;
     } else {
-      existingQuery += `&last_name=is.null`;
+      existingQuery += `&last_name=eq.${encodeURIComponent('')}`;
     }
     
     const existingResponse = await fetch(
@@ -743,10 +740,10 @@ app.post('/api/manager/teacher/:teacherId/student', requireAuth, async (req, res
       if (!newStudent || (!newStudent.id && (!newStudent[0] || !newStudent[0].id))) {
         console.log('ℹ️ Получаем созданного ученика из базы...');
         let findQuery = `first_name=eq.${encodeURIComponent(studentData.first_name)}`;
-        if (studentData.last_name) {
+        if (studentData.last_name && studentData.last_name.length > 0) {
           findQuery += `&last_name=eq.${encodeURIComponent(studentData.last_name)}`;
         } else {
-          findQuery += `&last_name=is.null`;
+          findQuery += `&last_name=eq.${encodeURIComponent('')}`;
         }
         
         const findResponse = await fetch(
