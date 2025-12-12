@@ -770,15 +770,62 @@
         
         if (data.by_student && data.by_student.length > 0) {
           html += '<div class="section-title" style="margin-top: 16px;">По ученикам:</div>';
-          data.by_student.forEach(stat => {
+          data.by_student.forEach((stat, index) => {
+            const studentName = `${stat.student.first_name || ''} ${stat.student.last_name || ''}`.trim();
+            const studentId = `student-${index}`;
+            const arrowId = `arrow-${index}`;
             html += `
-              <div class="student-stat">
-                <div class="student-stat-header">
-                  ${stat.student.first_name} ${stat.student.last_name || ''}
-                  ${stat.student.class_name ? `(${stat.student.class_name})` : ''}
+              <div class="student-stat" style="cursor: pointer; transition: background 0.2s;" 
+                   onclick="toggleStudentDetails('${studentId}', '${arrowId}')"
+                   onmouseover="this.style.background='#1c2128'" 
+                   onmouseout="this.style.background='#161b22'">
+                <div class="student-stat-header" style="display: flex; justify-content: space-between; align-items: center;">
+                  <div>
+                    <strong>${studentName}</strong>
+                    ${stat.student.class_name ? ` <span style="color: #8b949e;">(${stat.student.class_name})</span>` : ''}
+                  </div>
+                  <div id="${arrowId}" style="font-size: 12px; color: #8b949e; transition: transform 0.2s;">▶</div>
                 </div>
-                <div style="font-size: 14px; color: #8b949e;">
+                <div style="font-size: 14px; color: #8b949e; margin-top: 4px;">
                   Занятий: ${stat.lessons_count} | Часов: ${stat.total_hours} ч
+                </div>
+                <div id="${studentId}" style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid #30363d;">
+                  ${stat.lessons && stat.lessons.length > 0 ? `
+                    <div style="font-size: 13px; color: #8b949e; margin-bottom: 8px; font-weight: 600;">Детали занятий:</div>
+                    ${stat.lessons.map(lesson => {
+                      const date = new Date(lesson.date).toLocaleDateString('ru-RU', { 
+                        day: '2-digit', 
+                        month: '2-digit', 
+                        year: 'numeric',
+                        weekday: 'short'
+                      });
+                      const durationHours = lesson.duration_minutes ? Math.floor(lesson.duration_minutes / 60) : 0;
+                      const durationMinutes = lesson.duration_minutes ? lesson.duration_minutes % 60 : 0;
+                      const durationText = durationHours > 0 ? `${durationHours}ч ${durationMinutes}м` : `${durationMinutes}м`;
+                      return `
+                        <div style="
+                          background: #0d1117;
+                          border-radius: 8px;
+                          padding: 12px;
+                          margin-bottom: 8px;
+                          border-left: 3px solid #238636;
+                        ">
+                          <div style="font-size: 14px; margin-bottom: 6px; font-weight: 500;">
+                            📅 ${date}
+                          </div>
+                          <div style="font-size: 13px; color: #8b949e; margin-bottom: 6px;">
+                            ⏰ ${lesson.start_time} - ${lesson.end_time}
+                            ${lesson.duration_minutes ? ` <span style="color: #58a6ff;">(${durationText})</span>` : ''}
+                          </div>
+                          ${lesson.subject ? `
+                            <div style="font-size: 13px; color: #58a6ff; margin-top: 4px;">
+                              📚 ${lesson.subject}
+                            </div>
+                          ` : ''}
+                        </div>
+                      `;
+                    }).join('')}
+                  ` : '<div style="color: #8b949e; font-size: 13px;">Нет деталей занятий</div>'}
                 </div>
               </div>
             `;
@@ -857,6 +904,29 @@
     window.showTeacherDetail = showTeacherDetail;
     window.showTeacherTab = showTeacherTab;
     window.loadStatistics = loadStatistics;
+    
+    // Функция для раскрытия/скрытия деталей занятий ученика
+    function toggleStudentDetails(studentId, arrowId) {
+      const detailsDiv = document.getElementById(studentId);
+      const arrowDiv = document.getElementById(arrowId);
+      
+      if (detailsDiv) {
+        if (detailsDiv.style.display === 'none' || !detailsDiv.style.display) {
+          detailsDiv.style.display = 'block';
+          if (arrowDiv) {
+            arrowDiv.textContent = '▼';
+            arrowDiv.style.transform = 'rotate(0deg)';
+          }
+        } else {
+          detailsDiv.style.display = 'none';
+          if (arrowDiv) {
+            arrowDiv.textContent = '▶';
+            arrowDiv.style.transform = 'rotate(0deg)';
+          }
+        }
+      }
+    }
+    window.toggleStudentDetails = toggleStudentDetails;
     window.openAddStudentModal = openAddStudentModal;
     window.closeAddStudentModal = closeAddStudentModal;
     window.addStudent = addStudent;
