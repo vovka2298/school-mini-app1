@@ -137,6 +137,16 @@ async function requireAuth(req, res, next) {
 // 1. Получить расписание пользователя
 app.get('/api/my-schedule', requireAuth, async (req, res) => {
   try {
+    // Проверяем, что это преподаватель
+    if (req.user.role !== 'teacher') {
+      console.log(`⚠️  Попытка доступа к API преподавателя от менеджера (role: ${req.user.role})`);
+      return res.status(403).json({ 
+        error: 'Этот API доступен только преподавателям',
+        userRole: req.user.role,
+        _timestamp: Date.now() 
+      });
+    }
+    
     console.log('📅 Запрос расписания...');
     const teacherId = req.user.id;
     console.log('👨‍🏫 Используем teacher_id:', teacherId);
@@ -396,6 +406,16 @@ app.post('/api/profile/:tgId', requireAuth, async (req, res) => {
 // 6. Заявки
 app.get('/api/bookings/:tgId', requireAuth, async (req, res) => {
   try {
+    // Проверяем, что это преподаватель
+    if (req.user.role !== 'teacher') {
+      console.log(`⚠️  Попытка доступа к API заявок от менеджера (role: ${req.user.role})`);
+      return res.status(403).json({ 
+        error: 'Этот API доступен только преподавателям',
+        userRole: req.user.role,
+        _timestamp: Date.now() 
+      });
+    }
+    
     const teacherId = req.user.id;
     
     const response = await fetch(
@@ -998,8 +1018,15 @@ app.get('/api/debug-user', async (req, res) => {
 // Определение роли и редирект
 app.get('/', async (req, res) => {
   try {
+    // Отключаем кеширование для роутинга
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+    
     const telegramId = getTelegramIdFromRequest(req);
-    console.log(`🔍 Проверка пользователя для роутинга: telegramId=${telegramId}`);
+    console.log(`🔍 Проверка пользователя для роутинга: telegramId=${telegramId}, query=${JSON.stringify(req.query)}`);
     const user = await getUserByTelegramId(telegramId);
     
     if (!user) {
@@ -1077,9 +1104,21 @@ app.get('/', async (req, res) => {
     
     if (isManager) {
       console.log(`✅ Редирект на manager.html (роль: "${rawRole}")`);
+      // Отключаем кеширование для manager.html
+      res.set({
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      });
       return res.sendFile(path.join(__dirname, 'public', 'manager.html'));
     } else {
       console.log(`✅ Редирект на index.html (преподаватель), т.к. role="${normalizedRole}"`);
+      // Отключаем кеширование для index.html
+      res.set({
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      });
       return res.sendFile(path.join(__dirname, 'public', 'index.html'));
     }
     
