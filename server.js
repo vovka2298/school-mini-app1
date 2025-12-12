@@ -683,16 +683,20 @@ app.post('/api/manager/teacher/:teacherId/student', requireAuth, async (req, res
     }
     
     // Создаем или находим ученика
-    const studentData = {
-      first_name: first_name.trim(),
-      last_name: last_name ? last_name.trim() : null,
-      class_name: class_name ? class_name.trim() : null
-    };
+    const studentData = {};
+    studentData.first_name = first_name.trim();
+    if (last_name && last_name.trim().length > 0) {
+      studentData.last_name = last_name.trim();
+    }
+    // Если class_name указан, добавляем его
+    if (class_name && class_name.trim().length > 0) {
+      studentData.class_name = class_name.trim();
+    }
     
     // Проверяем, существует ли уже такой ученик (только по имени, если фамилии нет)
-    let existingQuery = `first_name=eq.${studentData.first_name}`;
+    let existingQuery = `first_name=eq.${encodeURIComponent(studentData.first_name)}`;
     if (studentData.last_name) {
-      existingQuery += `&last_name=eq.${studentData.last_name}`;
+      existingQuery += `&last_name=eq.${encodeURIComponent(studentData.last_name)}`;
     } else {
       existingQuery += `&last_name=is.null`;
     }
@@ -718,11 +722,50 @@ app.post('/api/manager/teacher/:teacherId/student', requireAuth, async (req, res
       );
       
       if (!createResponse.ok) {
-        throw new Error('Ошибка создания ученика');
+        const errorText = await createResponse.text();
+        console.error('❌ Ошибка создания ученика:', errorText);
+        throw new Error(`Ошибка создания ученика: ${errorText}`);
       }
       
-      const newStudent = await createResponse.json();
-      studentId = newStudent[0]?.id || newStudent.id;
+      // Supabase с return=minimal может вернуть пустой ответ
+      const responseText = await createResponse.text();
+      let newStudent = null;
+      
+      if (responseText && responseText.trim().length > 0) {
+        try {
+          newStudent = JSON.parse(responseText);
+        } catch (e) {
+          console.warn('⚠️ Не удалось распарсить ответ от Supabase, но ученик создан');
+        }
+      }
+      
+      // Если не получили данные из ответа, получаем созданного ученика из базы
+      if (!newStudent || (!newStudent.id && (!newStudent[0] || !newStudent[0].id))) {
+        console.log('ℹ️ Получаем созданного ученика из базы...');
+        let findQuery = `first_name=eq.${encodeURIComponent(studentData.first_name)}`;
+        if (studentData.last_name) {
+          findQuery += `&last_name=eq.${encodeURIComponent(studentData.last_name)}`;
+        } else {
+          findQuery += `&last_name=is.null`;
+        }
+        
+        const findResponse = await fetch(
+          `${SUPABASE_URL}/rest/v1/students?${findQuery}&order=created_at.desc&limit=1&select=id`,
+          { headers: createHeaders() }
+        );
+        if (findResponse.ok) {
+          const found = await findResponse.json();
+          if (found.length > 0) {
+            studentId = found[0].id;
+          }
+        }
+      } else {
+        studentId = newStudent[0]?.id || newStudent.id;
+      }
+      
+      if (!studentId) {
+        throw new Error('Не удалось получить ID созданного ученика');
+      }
     }
     
     // Связываем ученика с преподавателем
@@ -872,16 +915,8 @@ app.post('/api/lesson', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Ученик не найден у этого преподавателя', _timestamp: Date.now() });
     }
     
-    // Вычисляем длительность занятия в минутах
-    function timeToMinutes(timeStr) {
-      const [hours, minutes] = timeStr.split(':').map(Number);
-      return hours * 60 + minutes;
-    }
-    
-    const startMinutes = timeToMinutes(start_time);
-    const endMinutes = timeToMinutes(end_time);
-    const duration_minutes = endMinutes > startMinutes ? endMinutes - startMinutes : (24 * 60) - startMinutes + endMinutes;
-    
+    // duration_minutes - это generated column в Supabase, вычисляется автоматически
+    // Не нужно передавать его при создании
     const lessonData = {
       teacher_id: req.user.id,
       student_id: parseInt(student_id),
@@ -889,7 +924,6 @@ app.post('/api/lesson', requireAuth, async (req, res) => {
       lesson_date: lesson_date,
       start_time: start_time,
       end_time: end_time,
-      duration_minutes: duration_minutes,
       notes: notes || null
     };
     
