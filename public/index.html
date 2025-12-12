@@ -586,8 +586,87 @@
       loadSchedule();
     }
     
-    // Функция для загрузки заявок (Ученики)
+    // Функция для загрузки учеников
     async function showBookings() {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab')[1].classList.add('active');
+      
+      document.getElementById('content').innerHTML = `
+        <div class="loading">
+          Загрузка учеников...
+        </div>
+      `;
+      
+      try {
+        // Используем правильный API для получения учеников
+        const response = await fetch(`/api/teacher/students?tgId=${MY_ID}&t=${Date.now()}`);
+        const data = await response.json();
+        
+        if (!data.students || data.students.length === 0) {
+          document.getElementById('content').innerHTML = `
+            <div class="loading">
+              Нет учеников
+            </div>
+          `;
+          return;
+        }
+        
+        let html = '<div style="padding: 16px;">';
+        html += '<h3 style="margin-top: 0; margin-bottom: 16px;">МОИ УЧЕНИКИ</h3>';
+        
+        data.students.forEach(student => {
+          const fullName = `${student.first_name || ''} ${student.last_name || ''}`.trim() || student.first_name || 'Без имени';
+          const className = student.class_name ? ` • ${student.class_name}` : '';
+          
+          html += `
+            <div style="
+              background: #161b22;
+              border-radius: 12px;
+              padding: 16px;
+              margin-bottom: 12px;
+              border-left: 4px solid #238636;
+            ">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <strong style="font-size: 16px;">${fullName}</strong>
+                  ${className ? `
+                    <div style="font-size: 14px; color: #8b949e; margin-top: 4px;">
+                      🏫 Класс: ${student.class_name}
+                    </div>
+                  ` : ''}
+                </div>
+                <div style="text-align: right;">
+                  <div style="
+                    background: #238636;
+                    color: white;
+                    padding: 4px 12px;
+                    border-radius: 20px;
+                    font-size: 12px;
+                    display: inline-block;
+                  ">
+                    Ученик
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        });
+        
+        html += '</div>';
+        document.getElementById('content').innerHTML = html;
+      } catch (error) {
+        console.error('Ошибка загрузки учеников:', error);
+        document.getElementById('content').innerHTML = `
+          <div class="loading">
+            Ошибка загрузки учеников
+            <button onclick="showBookings()" style="margin-top: 20px;">Повторить</button>
+          </div>
+        `;
+      }
+    }
+    
+    // Старая функция для заявок (оставлена для совместимости, но не используется)
+    async function showBookingsOld() {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.tab')[1].classList.add('active');
       
