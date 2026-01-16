@@ -918,6 +918,28 @@
                         </div>
                       ` : ''}
                     </div>
+                    <div style="display: flex; gap: 8px; margin-left: 12px;">
+                      <button onclick="openEditLessonModal(${lesson.id})" style="
+                        background: #1f6feb;
+                        color: white;
+                        border: none;
+                        padding: 8px 12px;
+                        border-radius: 6px;
+                        font-size: 12px;
+                        cursor: pointer;
+                        white-space: nowrap;
+                      ">✏️ Редактировать</button>
+                      <button onclick="deleteLesson(${lesson.id})" style="
+                        background: #da3633;
+                        color: white;
+                        border: none;
+                        padding: 8px 12px;
+                        border-radius: 6px;
+                        font-size: 12px;
+                        cursor: pointer;
+                        white-space: nowrap;
+                      ">🗑️ Удалить</button>
+                    </div>
                   </div>
                 </div>
               `;
@@ -1166,11 +1188,271 @@
       }
     }
     
+    // Модальное окно для редактирования занятия
+    async function openEditLessonModal(lessonId) {
+      try {
+        // Загружаем данные занятия
+        const lessonsResponse = await fetch(`/api/teacher/lessons?tgId=${MY_ID}&t=${Date.now()}`);
+        const lessonsData = await lessonsResponse.json();
+        const lessons = lessonsData.lessons || [];
+        const lesson = lessons.find(l => l.id === lessonId);
+        
+        if (!lesson) {
+          showNotice('Занятие не найдено', 'error');
+          return;
+        }
+        
+        const students = window.lessonsStudents || [];
+        const subjects = window.lessonsSubjects || [];
+        
+        const modal = document.createElement('div');
+        modal.id = 'editLessonModal';
+        modal.style.cssText = `
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.8);
+          z-index: 1000;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 20px;
+        `;
+        
+        modal.innerHTML = `
+          <div style="
+            background: #161b22;
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 400px;
+            width: 100%;
+            border: 1px solid #30363d;
+          ">
+            <div style="font-size: 20px; font-weight: 600; margin-bottom: 16px; color: white;">
+              Редактировать занятие
+            </div>
+            <form id="editLessonForm" onsubmit="updateLesson(event, ${lessonId})">
+              <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #c9d1d9;">Ученик *</label>
+                <select id="editLessonStudent" required style="
+                  width: 100%;
+                  padding: 12px;
+                  background: #21262d;
+                  border: 1px solid #30363d;
+                  border-radius: 8px;
+                  color: white;
+                  font-size: 14px;
+                  box-sizing: border-box;
+                ">
+                  <option value="">Выберите ученика</option>
+                  ${students.map(s => `
+                    <option value="${s.id}" ${s.id === lesson.student_id ? 'selected' : ''}>${s.first_name} ${s.last_name || ''} ${s.class_name ? `(${s.class_name})` : ''}</option>
+                  `).join('')}
+                </select>
+              </div>
+              <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #c9d1d9;">Предмет</label>
+                <select id="editLessonSubject" style="
+                  width: 100%;
+                  padding: 12px;
+                  background: #21262d;
+                  border: 1px solid #30363d;
+                  border-radius: 8px;
+                  color: white;
+                  font-size: 14px;
+                  box-sizing: border-box;
+                ">
+                  <option value="">Не указан</option>
+                  ${subjects.map(s => `
+                    <option value="${s}" ${s === lesson.subject ? 'selected' : ''}>${s}</option>
+                  `).join('')}
+                </select>
+              </div>
+              <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #c9d1d9;">Дата *</label>
+                <input type="date" id="editLessonDate" value="${lesson.lesson_date}" required style="
+                  width: 100%;
+                  padding: 12px;
+                  background: #21262d;
+                  border: 1px solid #30363d;
+                  border-radius: 8px;
+                  color: white;
+                  font-size: 14px;
+                  box-sizing: border-box;
+                ">
+              </div>
+              <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+                <div style="flex: 1;">
+                  <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #c9d1d9;">Начало *</label>
+                  <input type="time" id="editLessonStartTime" value="${lesson.start_time}" required style="
+                    width: 100%;
+                    padding: 12px;
+                    background: #21262d;
+                    border: 1px solid #30363d;
+                    border-radius: 8px;
+                    color: white;
+                    font-size: 14px;
+                    box-sizing: border-box;
+                  ">
+                </div>
+                <div style="flex: 1;">
+                  <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #c9d1d9;">Окончание *</label>
+                  <input type="time" id="editLessonEndTime" value="${lesson.end_time}" required style="
+                    width: 100%;
+                    padding: 12px;
+                    background: #21262d;
+                    border: 1px solid #30363d;
+                    border-radius: 8px;
+                    color: white;
+                    font-size: 14px;
+                    box-sizing: border-box;
+                  ">
+                </div>
+              </div>
+              <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #c9d1d9;">Заметки</label>
+                <textarea id="editLessonNotes" rows="3" style="
+                  width: 100%;
+                  padding: 12px;
+                  background: #21262d;
+                  border: 1px solid #30363d;
+                  border-radius: 8px;
+                  color: white;
+                  font-size: 14px;
+                  box-sizing: border-box;
+                  resize: vertical;
+                  font-family: inherit;
+                ">${lesson.notes || ''}</textarea>
+              </div>
+              <div style="display: flex; gap: 12px; margin-top: 20px;">
+                <button type="button" onclick="closeEditLessonModal()" style="
+                  flex: 1;
+                  padding: 12px;
+                  background: #21262d;
+                  color: white;
+                  border: none;
+                  border-radius: 8px;
+                  font-size: 14px;
+                  font-weight: 600;
+                  cursor: pointer;
+                ">Отмена</button>
+                <button type="submit" style="
+                  flex: 1;
+                  padding: 12px;
+                  background: #1f6feb;
+                  color: white;
+                  border: none;
+                  border-radius: 8px;
+                  font-size: 14px;
+                  font-weight: 600;
+                  cursor: pointer;
+                ">Сохранить</button>
+              </div>
+            </form>
+          </div>
+        `;
+        
+        document.body.appendChild(modal);
+      } catch (error) {
+        console.error('Ошибка открытия модального окна редактирования:', error);
+        showNotice('Ошибка загрузки данных занятия', 'error');
+      }
+    }
+    
+    function closeEditLessonModal() {
+      const modal = document.getElementById('editLessonModal');
+      if (modal) {
+        document.body.removeChild(modal);
+      }
+    }
+    
+    async function updateLesson(event, lessonId) {
+      event.preventDefault();
+      
+      const studentId = document.getElementById('editLessonStudent').value;
+      const subject = document.getElementById('editLessonSubject').value;
+      const lessonDate = document.getElementById('editLessonDate').value;
+      const startTime = document.getElementById('editLessonStartTime').value;
+      const endTime = document.getElementById('editLessonEndTime').value;
+      const notes = document.getElementById('editLessonNotes').value.trim();
+      
+      if (!startTime || !endTime) {
+        showNotice('Укажите время начала и окончания', 'error');
+        return;
+      }
+      
+      if (startTime >= endTime) {
+        showNotice('Время окончания должно быть позже времени начала', 'error');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`/api/lesson/${lessonId}?tgId=${MY_ID}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            student_id: parseInt(studentId),
+            subject: subject || null,
+            lesson_date: lessonDate,
+            start_time: startTime,
+            end_time: endTime,
+            notes: notes || null
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok && result.ok) {
+          showNotice('Занятие успешно обновлено', 'success');
+          closeEditLessonModal();
+          showLessons();
+        } else {
+          showNotice(result.error || 'Ошибка обновления занятия', 'error');
+        }
+        
+      } catch (error) {
+        console.error('Ошибка обновления занятия:', error);
+        showNotice('Ошибка обновления занятия', 'error');
+      }
+    }
+    
+    async function deleteLesson(lessonId) {
+      if (!confirm('Вы уверены, что хотите удалить это занятие?')) {
+        return;
+      }
+      
+      try {
+        const response = await fetch(`/api/lesson/${lessonId}?tgId=${MY_ID}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok && result.ok) {
+          showNotice('Занятие успешно удалено', 'success');
+          showLessons();
+        } else {
+          showNotice(result.error || 'Ошибка удаления занятия', 'error');
+        }
+        
+      } catch (error) {
+        console.error('Ошибка удаления занятия:', error);
+        showNotice('Ошибка удаления занятия', 'error');
+      }
+    }
+    
     // Глобальные функции
     window.showLessons = showLessons;
     window.openAddLessonModal = openAddLessonModal;
     window.closeAddLessonModal = closeAddLessonModal;
     window.saveLesson = saveLesson;
+    window.openEditLessonModal = openEditLessonModal;
+    window.closeEditLessonModal = closeEditLessonModal;
+    window.updateLesson = updateLesson;
+    window.deleteLesson = deleteLesson;
     
     // Загружаем пользователя
     async function loadUser() {
