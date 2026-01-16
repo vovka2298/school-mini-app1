@@ -865,11 +865,14 @@ app.get('/api/manager/teacher/:teacherId/statistics', requireAuth, async (req, r
       lessons_count: stat.lessons.length,
       total_hours: Math.round((stat.total_minutes / 60) * 100) / 100,
       lessons: stat.lessons.map(l => ({
+        id: l.id,
         date: l.lesson_date,
         start_time: l.start_time,
         end_time: l.end_time,
         duration_minutes: l.duration_minutes,
-        subject: l.subject
+        subject: l.subject,
+        notes: l.notes,
+        student_id: l.student_id
       }))
     }));
     
@@ -987,6 +990,144 @@ app.post('/api/lesson', requireAuth, async (req, res) => {
   }
 });
 
+// 16.1. Редактировать занятие
+app.put('/api/lesson/:lessonId', requireAuth, async (req, res) => {
+  try {
+    const { lessonId } = req.params;
+    const { student_id, subject, lesson_date, start_time, end_time, notes } = req.body;
+    
+    if (!lesson_date || !start_time || !end_time) {
+      return res.status(400).json({ error: 'Необходимо указать дату и время', _timestamp: Date.now() });
+    }
+    
+    // Получаем занятие для проверки прав доступа
+    const lessonResponse = await fetch(
+      `${SUPABASE_URL}/rest/v1/lessons?id=eq.${lessonId}&select=teacher_id,student_id`,
+      { headers: createHeaders() }
+    );
+    const lessons = lessonResponse.ok ? await lessonResponse.json() : [];
+    
+    if (lessons.length === 0) {
+      return res.status(404).json({ error: 'Занятие не найдено', _timestamp: Date.now() });
+    }
+    
+    const lesson = lessons[0];
+    
+    // Проверяем права доступа
+    if (req.user.role === 'teacher' && lesson.teacher_id !== req.user.id) {
+      return res.status(403).json({ error: 'Доступ запрещен', _timestamp: Date.now() });
+    }
+    
+    // Если указан новый student_id, проверяем что он принадлежит преподавателю
+    if (student_id && req.user.role === 'teacher') {
+      const linkResponse = await fetch(
+        `${SUPABASE_URL}/rest/v1/teacher_students?teacher_id=eq.${req.user.id}&student_id=eq.${student_id}&select=id`,
+        { headers: createHeaders() }
+      );
+      const links = linkResponse.ok ? await linkResponse.json() : [];
+      
+      if (links.length === 0) {
+        return res.status(403).json({ error: 'Ученик не найден у этого преподавателя', _timestamp: Date.now() });
+      }
+    }
+    
+    // Обновляем занятие
+    const updateData = {
+      subject: subject || null,
+      lesson_date: lesson_date,
+      start_time: start_time,
+      end_time: end_time,
+      notes: notes || null
+    };
+    
+    // Если указан новый student_id и это менеджер, обновляем его
+    if (student_id && req.user.role === 'manager') {
+      updateData.student_id = parseInt(student_id);
+    }
+    
+    const response = await fetch(
+      `${SUPABASE_URL}/rest/v1/lessons?id=eq.${lessonId}`,
+      {
+        method: 'PATCH',
+        headers: createHeaders(true),
+        body: JSON.stringify(updateData)
+      }
+    );
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Ошибка обновления занятия: ${errorText}`);
+    }
+    
+    // Получаем обновленное занятие
+    const updatedResponse = await fetch(
+      `${SUPABASE_URL}/rest/v1/lessons?id=eq.${lessonId}&select=*`,
+      { headers: createHeaders() }
+    );
+    const updatedLessons = updatedResponse.ok ? await updatedResponse.json() : [];
+    
+    res.json({
+      ok: true,
+      lesson: updatedLessons.length > 0 ? updatedLessons[0] : null,
+      message: 'Занятие успешно обновлено',
+      _timestamp: Date.now()
+    });
+    
+  } catch (error) {
+    console.error('❌ Ошибка обновления занятия:', error);
+    res.status(500).json({ error: error.message, _timestamp: Date.now() });
+  }
+});
+
+// 16.2. Удалить занятие
+app.delete('/api/lesson/:lessonId', requireAuth, async (req, res) => {
+  try {
+    const { lessonId } = req.params;
+    
+    // Получаем занятие для проверки прав доступа
+    const lessonResponse = await fetch(
+      `${SUPABASE_URL}/rest/v1/lessons?id=eq.${lessonId}&select=teacher_id`,
+      { headers: createHeaders() }
+    );
+    const lessons = lessonResponse.ok ? await lessonResponse.json() : [];
+    
+    if (lessons.length === 0) {
+      return res.status(404).json({ error: 'Занятие не найдено', _timestamp: Date.now() });
+    }
+    
+    const lesson = lessons[0];
+    
+    // Проверяем права доступа
+    if (req.user.role === 'teacher' && lesson.teacher_id !== req.user.id) {
+      return res.status(403).json({ error: 'Доступ запрещен', _timestamp: Date.now() });
+    }
+    
+    // Удаляем занятие
+    const response = await fetch(
+      `${SUPABASE_URL}/rest/v1/lessons?id=eq.${lessonId}`,
+      {
+        method: 'DELETE',
+        headers: createHeaders(true)
+      }
+    );
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Ошибка удаления занятия: ${errorText}`);
+    }
+    
+    res.json({
+      ok: true,
+      message: 'Занятие успешно удалено',
+      _timestamp: Date.now()
+    });
+    
+  } catch (error) {
+    console.error('❌ Ошибка удаления занятия:', error);
+    res.status(500).json({ error: error.message, _timestamp: Date.now() });
+  }
+});
+
 // 17. Получить список учеников преподавателя
 app.get('/api/teacher/students', requireAuth, async (req, res) => {
   try {
@@ -1019,6 +1160,60 @@ app.get('/api/teacher/students', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('❌ Ошибка получения учеников:', error);
     res.json({ students: [], _timestamp: Date.now() });
+  }
+});
+
+// 17.1. Получить одно занятие по ID
+app.get('/api/lesson/:lessonId', requireAuth, async (req, res) => {
+  try {
+    const { lessonId } = req.params;
+    
+    const response = await fetch(
+      `${SUPABASE_URL}/rest/v1/lessons?id=eq.${lessonId}&select=*`,
+      { headers: createHeaders() }
+    );
+    
+    if (!response.ok) {
+      return res.status(404).json({ error: 'Занятие не найдено', _timestamp: Date.now() });
+    }
+    
+    const lessons = await response.json();
+    
+    if (lessons.length === 0) {
+      return res.status(404).json({ error: 'Занятие не найдено', _timestamp: Date.now() });
+    }
+    
+    const lesson = lessons[0];
+    
+    // Проверяем права доступа
+    if (req.user.role === 'teacher' && lesson.teacher_id !== req.user.id) {
+      return res.status(403).json({ error: 'Доступ запрещен', _timestamp: Date.now() });
+    }
+    
+    // Получаем информацию об ученике
+    let student = null;
+    if (lesson.student_id) {
+      const studentResponse = await fetch(
+        `${SUPABASE_URL}/rest/v1/students?id=eq.${lesson.student_id}&select=*`,
+        { headers: createHeaders() }
+      );
+      if (studentResponse.ok) {
+        const students = await studentResponse.json();
+        if (students.length > 0) {
+          student = students[0];
+        }
+      }
+    }
+    
+    res.json({
+      ...lesson,
+      student: student,
+      _timestamp: Date.now()
+    });
+    
+  } catch (error) {
+    console.error('❌ Ошибка получения занятия:', error);
+    res.status(500).json({ error: error.message, _timestamp: Date.now() });
   }
 });
 
