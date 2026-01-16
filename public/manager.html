@@ -810,18 +810,49 @@
                           margin-bottom: 8px;
                           border-left: 3px solid #238636;
                         ">
-                          <div style="font-size: 14px; margin-bottom: 6px; font-weight: 500;">
-                            📅 ${date}
-                          </div>
-                          <div style="font-size: 13px; color: #8b949e; margin-bottom: 6px;">
-                            ⏰ ${lesson.start_time} - ${lesson.end_time}
-                            ${lesson.duration_minutes ? ` <span style="color: #58a6ff;">(${durationText})</span>` : ''}
-                          </div>
-                          ${lesson.subject ? `
-                            <div style="font-size: 13px; color: #58a6ff; margin-top: 4px;">
-                              📚 ${lesson.subject}
+                          <div style="display: flex; justify-content: space-between; align-items: start;">
+                            <div style="flex: 1;">
+                              <div style="font-size: 14px; margin-bottom: 6px; font-weight: 500;">
+                                📅 ${date}
+                              </div>
+                              <div style="font-size: 13px; color: #8b949e; margin-bottom: 6px;">
+                                ⏰ ${lesson.start_time} - ${lesson.end_time}
+                                ${lesson.duration_minutes ? ` <span style="color: #58a6ff;">(${durationText})</span>` : ''}
+                              </div>
+                              ${lesson.subject ? `
+                                <div style="font-size: 13px; color: #58a6ff; margin-top: 4px;">
+                                  📚 ${lesson.subject}
+                                </div>
+                              ` : ''}
+                              ${lesson.notes ? `
+                                <div style="font-size: 12px; color: #8b949e; margin-top: 6px; padding-top: 6px; border-top: 1px solid #30363d;">
+                                  ${lesson.notes}
+                                </div>
+                              ` : ''}
                             </div>
-                          ` : ''}
+                            <div style="display: flex; gap: 6px; margin-left: 12px;">
+                              <button onclick="openEditLessonModalManager(${lesson.id}, ${currentTeacherId})" style="
+                                background: #1f6feb;
+                                color: white;
+                                border: none;
+                                padding: 6px 10px;
+                                border-radius: 6px;
+                                font-size: 11px;
+                                cursor: pointer;
+                                white-space: nowrap;
+                              ">✏️</button>
+                              <button onclick="deleteLessonManager(${lesson.id})" style="
+                                background: #da3633;
+                                color: white;
+                                border: none;
+                                padding: 6px 10px;
+                                border-radius: 6px;
+                                font-size: 11px;
+                                cursor: pointer;
+                                white-space: nowrap;
+                              ">🗑️</button>
+                            </div>
+                          </div>
                         </div>
                       `;
                     }).join('')}
@@ -893,6 +924,272 @@
       }
     }
     
+    // Модальное окно для редактирования занятия (менеджер)
+    async function openEditLessonModalManager(lessonId, teacherId) {
+      try {
+        // Загружаем данные занятия
+        const lessonResponse = await fetch(`/api/lesson/${lessonId}?tgId=${MY_TG_ID}&t=${Date.now()}`);
+        if (!lessonResponse.ok) {
+          showNotice('Занятие не найдено', 'error');
+          return;
+        }
+        const lesson = await lessonResponse.json();
+        
+        // Загружаем данные преподавателя для получения списка учеников и предметов
+        const teacherResponse = await fetch(`/api/manager/teacher/${teacherId}?tgId=${MY_TG_ID}&t=${Date.now()}`);
+        const teacherData = await teacherResponse.json();
+        
+        // Загружаем учеников преподавателя
+        const students = teacherData.students || [];
+        
+        // Загружаем предметы преподавателя
+        const subjects = teacherData.subjects || [];
+        
+        const modal = document.createElement('div');
+        modal.id = 'editLessonModalManager';
+        modal.style.cssText = `
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.8);
+          z-index: 1000;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 20px;
+        `;
+        
+        modal.innerHTML = `
+          <div style="
+            background: #161b22;
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 400px;
+            width: 100%;
+            border: 1px solid #30363d;
+          ">
+            <div style="font-size: 20px; font-weight: 600; margin-bottom: 16px; color: white;">
+              Редактировать занятие
+            </div>
+            <form id="editLessonFormManager" onsubmit="updateLessonManager(event, ${lessonId})">
+              <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #c9d1d9;">Ученик *</label>
+                <select id="editLessonStudentManager" required style="
+                  width: 100%;
+                  padding: 12px;
+                  background: #21262d;
+                  border: 1px solid #30363d;
+                  border-radius: 8px;
+                  color: white;
+                  font-size: 14px;
+                  box-sizing: border-box;
+                ">
+                  <option value="">Выберите ученика</option>
+                  ${students.map(s => `
+                    <option value="${s.id}" ${s.id === lesson.student_id ? 'selected' : ''}>${s.first_name || ''} ${s.last_name || ''} ${s.class_name ? `(${s.class_name})` : ''}</option>
+                  `).join('')}
+                </select>
+              </div>
+              <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #c9d1d9;">Предмет</label>
+                <select id="editLessonSubjectManager" style="
+                  width: 100%;
+                  padding: 12px;
+                  background: #21262d;
+                  border: 1px solid #30363d;
+                  border-radius: 8px;
+                  color: white;
+                  font-size: 14px;
+                  box-sizing: border-box;
+                ">
+                  <option value="">Не указан</option>
+                  ${subjects.map(s => `
+                    <option value="${s}" ${s === lesson.subject ? 'selected' : ''}>${s}</option>
+                  `).join('')}
+                </select>
+              </div>
+              <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #c9d1d9;">Дата *</label>
+                <input type="date" id="editLessonDateManager" value="${lesson.lesson_date || lesson.date}" required style="
+                  width: 100%;
+                  padding: 12px;
+                  background: #21262d;
+                  border: 1px solid #30363d;
+                  border-radius: 8px;
+                  color: white;
+                  font-size: 14px;
+                  box-sizing: border-box;
+                ">
+              </div>
+              <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+                <div style="flex: 1;">
+                  <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #c9d1d9;">Начало *</label>
+                  <input type="time" id="editLessonStartTimeManager" value="${lesson.start_time}" required style="
+                    width: 100%;
+                    padding: 12px;
+                    background: #21262d;
+                    border: 1px solid #30363d;
+                    border-radius: 8px;
+                    color: white;
+                    font-size: 14px;
+                    box-sizing: border-box;
+                  ">
+                </div>
+                <div style="flex: 1;">
+                  <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #c9d1d9;">Окончание *</label>
+                  <input type="time" id="editLessonEndTimeManager" value="${lesson.end_time}" required style="
+                    width: 100%;
+                    padding: 12px;
+                    background: #21262d;
+                    border: 1px solid #30363d;
+                    border-radius: 8px;
+                    color: white;
+                    font-size: 14px;
+                    box-sizing: border-box;
+                  ">
+                </div>
+              </div>
+              <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #c9d1d9;">Заметки</label>
+                <textarea id="editLessonNotesManager" rows="3" style="
+                  width: 100%;
+                  padding: 12px;
+                  background: #21262d;
+                  border: 1px solid #30363d;
+                  border-radius: 8px;
+                  color: white;
+                  font-size: 14px;
+                  box-sizing: border-box;
+                  resize: vertical;
+                  font-family: inherit;
+                ">${lesson.notes || ''}</textarea>
+              </div>
+              <div style="display: flex; gap: 12px; margin-top: 20px;">
+                <button type="button" onclick="closeEditLessonModalManager()" style="
+                  flex: 1;
+                  padding: 12px;
+                  background: #21262d;
+                  color: white;
+                  border: none;
+                  border-radius: 8px;
+                  font-size: 14px;
+                  font-weight: 600;
+                  cursor: pointer;
+                ">Отмена</button>
+                <button type="submit" style="
+                  flex: 1;
+                  padding: 12px;
+                  background: #1f6feb;
+                  color: white;
+                  border: none;
+                  border-radius: 8px;
+                  font-size: 14px;
+                  font-weight: 600;
+                  cursor: pointer;
+                ">Сохранить</button>
+              </div>
+            </form>
+          </div>
+        `;
+        
+        document.body.appendChild(modal);
+      } catch (error) {
+        console.error('Ошибка открытия модального окна редактирования:', error);
+        showNotice('Ошибка загрузки данных занятия', 'error');
+      }
+    }
+    
+    function closeEditLessonModalManager() {
+      const modal = document.getElementById('editLessonModalManager');
+      if (modal) {
+        document.body.removeChild(modal);
+      }
+    }
+    
+    async function updateLessonManager(event, lessonId) {
+      event.preventDefault();
+      
+      const studentId = document.getElementById('editLessonStudentManager').value;
+      const subject = document.getElementById('editLessonSubjectManager').value;
+      const lessonDate = document.getElementById('editLessonDateManager').value;
+      const startTime = document.getElementById('editLessonStartTimeManager').value;
+      const endTime = document.getElementById('editLessonEndTimeManager').value;
+      const notes = document.getElementById('editLessonNotesManager').value.trim();
+      
+      if (!startTime || !endTime) {
+        showNotice('Укажите время начала и окончания', 'error');
+        return;
+      }
+      
+      if (startTime >= endTime) {
+        showNotice('Время окончания должно быть позже времени начала', 'error');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`/api/lesson/${lessonId}?tgId=${MY_TG_ID}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            student_id: parseInt(studentId),
+            subject: subject || null,
+            lesson_date: lessonDate,
+            start_time: startTime,
+            end_time: endTime,
+            notes: notes || null
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok && result.ok) {
+          showNotice('Занятие успешно обновлено', 'success');
+          closeEditLessonModalManager();
+          // Обновляем статистику
+          if (currentTeacherId) {
+            loadStatistics();
+          }
+        } else {
+          showNotice(result.error || 'Ошибка обновления занятия', 'error');
+        }
+        
+      } catch (error) {
+        console.error('Ошибка обновления занятия:', error);
+        showNotice('Ошибка обновления занятия', 'error');
+      }
+    }
+    
+    async function deleteLessonManager(lessonId) {
+      if (!confirm('Вы уверены, что хотите удалить это занятие?')) {
+        return;
+      }
+      
+      try {
+        const response = await fetch(`/api/lesson/${lessonId}?tgId=${MY_TG_ID}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok && result.ok) {
+          showNotice('Занятие успешно удалено', 'success');
+          // Обновляем статистику
+          if (currentTeacherId) {
+            loadStatistics();
+          }
+        } else {
+          showNotice(result.error || 'Ошибка удаления занятия', 'error');
+        }
+        
+      } catch (error) {
+        console.error('Ошибка удаления занятия:', error);
+        showNotice('Ошибка удаления занятия', 'error');
+      }
+    }
+    
     // Инициализация
     async function init() {
       await loadUser();
@@ -904,6 +1201,10 @@
     window.showTeacherDetail = showTeacherDetail;
     window.showTeacherTab = showTeacherTab;
     window.loadStatistics = loadStatistics;
+    window.openEditLessonModalManager = openEditLessonModalManager;
+    window.closeEditLessonModalManager = closeEditLessonModalManager;
+    window.updateLessonManager = updateLessonManager;
+    window.deleteLessonManager = deleteLessonManager;
     
     // Функция для раскрытия/скрытия деталей занятий ученика
     function toggleStudentDetails(studentId, arrowId) {
@@ -940,4 +1241,3 @@
   </script>
 </body>
 </html>
-
