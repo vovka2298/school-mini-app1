@@ -152,7 +152,7 @@ app.get('/api/my-schedule', requireAuth, async (req, res) => {
     console.log('👨‍🏫 Используем teacher_id:', teacherId);
     
     const response = await fetch(
-      `${SUPABASE_URL}/rest/v1/schedules?teacher_id=eq.${teacherId}&select=day,time_slot,status`,
+      `${SUPABASE_URL}/rest/v1/schedules?teacher_id=eq.${teacherId}&select=day,time_slot,status,student_name`,
       { headers: createHeaders() }
     );
     
@@ -174,7 +174,15 @@ app.get('/api/my-schedule', requireAuth, async (req, res) => {
     
     schedules.forEach(row => {
       if (schedule[row.day]) {
-        schedule[row.day][row.time_slot] = row.status;
+        // Если есть имя ученика, сохраняем как объект, иначе как число (для обратной совместимости)
+        if (row.student_name) {
+          schedule[row.day][row.time_slot] = {
+            status: row.status,
+            student_name: row.student_name
+          };
+        } else {
+          schedule[row.day][row.time_slot] = row.status;
+        }
       }
     });
     
@@ -243,11 +251,17 @@ app.post('/api/schedule/:tgId', requireAuth, async (req, res) => {
     Object.keys(newSchedule).forEach(day => {
       const slots = newSchedule[day];
       Object.keys(slots).forEach(time => {
+        const slotValue = slots[time];
+        // Поддерживаем как старый формат (число), так и новый (объект с student_name)
+        const status = typeof slotValue === 'object' ? slotValue.status : slotValue;
+        const studentName = typeof slotValue === 'object' && slotValue.student_name ? slotValue.student_name : null;
+        
         scheduleData.push({
           teacher_id: teacherId,
           day: day,
           time_slot: time,
-          status: slots[time]
+          status: status,
+          student_name: studentName
         });
       });
     });
