@@ -346,8 +346,10 @@
       let hash = '';
       FULL_DAYS.forEach(day => {
         TIMES.forEach(time => {
-          const state = sched[day]?.[time] || 0;
-          hash += `${day}-${time}:${state}|`;
+          const slotValue = sched[day]?.[time] || 0;
+          const state = typeof slotValue === 'object' ? slotValue.status : slotValue;
+          const studentName = typeof slotValue === 'object' && slotValue.student_name ? slotValue.student_name : '';
+          hash += `${day}-${time}:${state}:${studentName}|`;
         });
       });
       return hash;
@@ -515,10 +517,19 @@
         html += `<div class="time-row"><div class="time-label">${time}</div><div class="slots">`;
         DAYS.forEach((_, i) => {
           const day = FULL_DAYS[i];
-          const state = schedule[day]?.[time] || 0;
-          html += `<div class="slot state-${state}" onclick="toggleSlot('${day}', '${time}', this)">
+          const slotValue = schedule[day]?.[time] || 0;
+          const state = typeof slotValue === 'object' ? slotValue.status : slotValue;
+          const studentName = typeof slotValue === 'object' && slotValue.student_name ? slotValue.student_name : null;
+          const slotId = `slot-${day}-${time}`;
+          html += `<div class="slot state-${state}" id="${slotId}" 
+                   onclick="toggleSlot('${day}', '${time}', this)"
+                   oncontextmenu="handleSlotLongPress(event, '${day}', '${time}', ${state}); return false;"
+                   ontouchstart="handleSlotTouchStart(event, '${day}', '${time}', ${state})"
+                   ontouchend="handleSlotTouchEnd(event)"
+                   ontouchmove="handleSlotTouchEnd(event)">
             <div class="slot-time">${time}</div>
             <div>${TEXTS[state]}</div>
+            ${studentName ? `<div style="font-size: 9px; margin-top: 4px; opacity: 0.9; line-height: 1.2;">${studentName}</div>` : ''}
           </div>`;
         });
         html += '</div></div>';
@@ -539,13 +550,38 @@
       try {
         // Локальное обновление
         if (!schedule[day]) schedule[day] = {};
-        const current = schedule[day][time] || 0;
+        const currentValue = schedule[day][time] || 0;
+        const current = typeof currentValue === 'object' ? currentValue.status : currentValue;
         const next = (current + 1) % 3;
-        schedule[day][time] = next;
+        
+        // Сохраняем имя ученика, если оно было
+        const studentName = typeof currentValue === 'object' && currentValue.student_name ? currentValue.student_name : null;
+        if (next === 2 && studentName) {
+          schedule[day][time] = { status: next, student_name: studentName };
+        } else if (next === 2) {
+          schedule[day][time] = next;
+        } else {
+          schedule[day][time] = next;
+        }
         
         // Мгновенное обновление UI
         element.className = `slot state-${next}`;
-        element.querySelector('div:last-child').textContent = TEXTS[next];
+        const textDiv = element.querySelectorAll('div')[1]; // Второй div с текстом
+        if (textDiv) {
+          textDiv.textContent = TEXTS[next];
+        }
+        
+        // Удаляем имя ученика, если ячейка не занята
+        const nameDiv = element.querySelectorAll('div')[2];
+        if (nameDiv && next !== 2) {
+          nameDiv.remove();
+        } else if (next === 2 && studentName && !nameDiv) {
+          // Добавляем имя ученика, если ячейка занята и имя есть
+          const newNameDiv = document.createElement('div');
+          newNameDiv.style.cssText = 'font-size: 9px; margin-top: 4px; opacity: 0.9; line-height: 1.2;';
+          newNameDiv.textContent = studentName;
+          element.appendChild(newNameDiv);
+        }
         
         // Сохраняем в кеш сразу
         saveToCache(schedule);
@@ -1522,12 +1558,289 @@
       init();
     }
     
+    // Обработчик долгого нажатия для занятых ячеек
+    let longPressTimer = null;
+    let longPressTarget = null;
+    let touchStartTime = null;
+    
+    // Обработчик долгого нажатия (правый клик или долгое удержание)
+    function handleSlotLongPress(event, day, time, state) {
+      // Обрабатываем только занятые ячейки (state === 2)
+      if (state !== 2) {
+        return;
+      }
+      
+      event.preventDefault();
+      event.stopPropagation();
+      
+      // Получаем текущее имя ученика
+      const currentValue = schedule[day]?.[time] || 0;
+      const currentStudentName = typeof currentValue === 'object' && currentValue.student_name ? currentValue.student_name : '';
+      
+      // Создаем модальное окно
+      const modal = document.createElement('div');
+      modal.id = 'studentNameModal';
+      modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      `;
+      
+      modal.innerHTML = `
+        <div style="
+          background: #161b22;
+          border-radius: 12px;
+          padding: 24px;
+          max-width: 350px;
+          width: 100%;
+          border: 1px solid #30363d;
+        ">
+          <div style="font-size: 20px; font-weight: 600; margin-bottom: 16px; color: white;">
+            Имя ученика
+          </div>
+          <div style="font-size: 14px; color: #8b949e; margin-bottom: 16px;">
+            ${day}, ${time}
+          </div>
+          <input type="text" id="studentNameInput" value="${currentStudentName}" placeholder="Введите имя ученика" style="
+            width: 100%;
+            padding: 12px;
+            background: #21262d;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            box-sizing: border-box;
+            margin-bottom: 16px;
+          " autofocus>
+          <div style="display: flex; gap: 12px;">
+            <button onclick="closeStudentNameModal()" style="
+              flex: 1;
+              padding: 12px;
+              background: #21262d;
+              color: white;
+              border: none;
+              border-radius: 8px;
+              font-size: 14px;
+              font-weight: 600;
+              cursor: pointer;
+            ">Отмена</button>
+            <button onclick="saveStudentName('${day}', '${time}')" style="
+              flex: 1;
+              padding: 12px;
+              background: #1f6feb;
+              color: white;
+              border: none;
+              border-radius: 8px;
+              font-size: 14px;
+              font-weight: 600;
+              cursor: pointer;
+            ">Сохранить</button>
+            ${currentStudentName ? `
+            <button onclick="clearStudentName('${day}', '${time}')" style="
+              padding: 12px;
+              background: #da3633;
+              color: white;
+              border: none;
+              border-radius: 8px;
+              font-size: 14px;
+              font-weight: 600;
+              cursor: pointer;
+            ">Очистить</button>
+            ` : ''}
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(modal);
+      
+      // Фокус на поле ввода
+      setTimeout(() => {
+        const input = document.getElementById('studentNameInput');
+        if (input) {
+          input.focus();
+          input.select();
+        }
+      }, 100);
+      
+      // Закрытие по Enter
+      const input = document.getElementById('studentNameInput');
+      if (input) {
+        input.addEventListener('keypress', function(e) {
+          if (e.key === 'Enter') {
+            saveStudentName(day, time);
+          }
+        });
+      }
+    }
+    
+    function closeStudentNameModal() {
+      const modal = document.getElementById('studentNameModal');
+      if (modal) {
+        document.body.removeChild(modal);
+      }
+    }
+    
+    async function saveStudentName(day, time) {
+      const input = document.getElementById('studentNameInput');
+      if (!input) return;
+      
+      const studentName = input.value.trim();
+      
+      // Обновляем расписание
+      if (!schedule[day]) schedule[day] = {};
+      const currentValue = schedule[day][time] || 0;
+      const state = typeof currentValue === 'object' ? currentValue.status : currentValue;
+      
+      if (state === 2) {
+        if (studentName) {
+          schedule[day][time] = { status: 2, student_name: studentName };
+        } else {
+          schedule[day][time] = 2;
+        }
+      }
+      
+      // Обновляем UI
+      const slotElement = document.getElementById(`slot-${day}-${time}`);
+      if (slotElement && state === 2) {
+        // Удаляем старое имя, если есть
+        const nameDivs = slotElement.querySelectorAll('div');
+        if (nameDivs.length > 2) {
+          nameDivs[2].remove();
+        }
+        
+        // Добавляем новое имя
+        if (studentName) {
+          const newNameDiv = document.createElement('div');
+          newNameDiv.style.cssText = 'font-size: 9px; margin-top: 4px; opacity: 0.9; line-height: 1.2;';
+          newNameDiv.textContent = studentName;
+          slotElement.appendChild(newNameDiv);
+        }
+      }
+      
+      // Сохраняем в кеш
+      saveToCache(schedule);
+      lastScheduleHash = getScheduleHash(schedule);
+      
+      // Сохраняем на сервер
+      try {
+        const response = await fetch(`/api/schedule/${MY_ID}?tgId=${MY_ID}&t=${Date.now()}`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(schedule)
+        });
+        
+        const result = await response.json();
+        if (result.ok) {
+          showNotice("Имя ученика сохранено", "#238636", 1500);
+          lastUpdateTime = result._timestamp || Date.now();
+          updateLastSyncTime();
+        }
+      } catch (saveError) {
+        console.error("Ошибка сохранения на сервер:", saveError);
+        showNotice("Ошибка сети", "#da3633", 2000);
+      }
+      
+      closeStudentNameModal();
+    }
+    
+    async function clearStudentName(day, time) {
+      // Обновляем расписание
+      if (!schedule[day]) schedule[day] = {};
+      const currentValue = schedule[day][time] || 0;
+      const state = typeof currentValue === 'object' ? currentValue.status : currentValue;
+      
+      if (state === 2) {
+        schedule[day][time] = 2;
+      }
+      
+      // Обновляем UI
+      const slotElement = document.getElementById(`slot-${day}-${time}`);
+      if (slotElement && state === 2) {
+        const nameDivs = slotElement.querySelectorAll('div');
+        if (nameDivs.length > 2) {
+          nameDivs[2].remove();
+        }
+      }
+      
+      // Сохраняем в кеш
+      saveToCache(schedule);
+      lastScheduleHash = getScheduleHash(schedule);
+      
+      // Сохраняем на сервер
+      try {
+        const response = await fetch(`/api/schedule/${MY_ID}?tgId=${MY_ID}&t=${Date.now()}`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(schedule)
+        });
+        
+        const result = await response.json();
+        if (result.ok) {
+          showNotice("Имя ученика удалено", "#238636", 1500);
+          lastUpdateTime = result._timestamp || Date.now();
+          updateLastSyncTime();
+        }
+      } catch (saveError) {
+        console.error("Ошибка сохранения на сервер:", saveError);
+        showNotice("Ошибка сети", "#da3633", 2000);
+      }
+      
+      closeStudentNameModal();
+    }
+    
     // Глобальные функции для кнопок
     window.forceRefresh = forceRefresh;
     window.showSchedule = showSchedule;
     window.showBookings = showBookings;
     window.showSubjects = showSubjects;
     window.toggleSlot = toggleSlot;
+    // Обработчик touch для долгого нажатия на мобильных устройствах
+    function handleSlotTouchStart(event, day, time, state) {
+      if (state !== 2) {
+        return;
+      }
+      
+      touchStartTime = Date.now();
+      longPressTarget = { day, time, state };
+      
+      longPressTimer = setTimeout(() => {
+        if (longPressTarget && longPressTarget.day === day && longPressTarget.time === time) {
+          // Создаем синтетическое событие для открытия модального окна
+          const syntheticEvent = { preventDefault: () => {}, stopPropagation: () => {} };
+          handleSlotLongPress(syntheticEvent, day, time, state);
+          longPressTarget = null;
+        }
+      }, 500); // 500ms для долгого нажатия
+    }
+    
+    function handleSlotTouchEnd(event) {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+      
+      // Если нажатие было коротким (меньше 500ms), не открываем модальное окно
+      if (touchStartTime && Date.now() - touchStartTime < 500) {
+        longPressTarget = null;
+      }
+      
+      touchStartTime = null;
+    }
+    
+    window.handleSlotLongPress = handleSlotLongPress;
+    window.handleSlotTouchStart = handleSlotTouchStart;
+    window.handleSlotTouchEnd = handleSlotTouchEnd;
+    window.closeStudentNameModal = closeStudentNameModal;
+    window.saveStudentName = saveStudentName;
+    window.clearStudentName = clearStudentName;
   </script>
 </body>
 </html>
