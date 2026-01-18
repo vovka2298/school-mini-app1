@@ -267,6 +267,22 @@
     <div class="legend-item"><div class="legend-box" style="background:#da3633"></div>Занят</div>
   </div>
   
+  <div id="occupancyStats" style="
+    padding: 12px 16px;
+    background: #161b22;
+    border-bottom: 1px solid #30363d;
+    text-align: center;
+    font-size: 14px;
+    color: #c9d1d9;
+    display: none;
+  ">
+    <div style="display: flex; justify-content: center; align-items: center; gap: 8px;">
+      <span style="color: #58a6ff; font-weight: 600;">⏰ Занятость за неделю:</span>
+      <span id="weeklyHours" style="color: white; font-weight: 600;">0 ч</span>
+      <span style="color: #8b949e;">(<span id="occupiedSlots">0</span> слотов по 30 мин)</span>
+    </div>
+  </div>
+  
   <div class="content" id="content">
     <div class="loading">Загрузка расписания...</div>
   </div>
@@ -498,6 +514,48 @@
       await loadSchedule(true);
     }
     
+    // Подсчет занятости (красные квадратики - статус 2)
+    function calculateOccupancy() {
+      let occupiedSlots = 0;
+      
+      FULL_DAYS.forEach(day => {
+        TIMES.forEach(time => {
+          const slotValue = schedule[day]?.[time] || 0;
+          const state = typeof slotValue === 'object' ? slotValue.status : slotValue;
+          if (state === 2) {
+            occupiedSlots++;
+          }
+        });
+      });
+      
+      // Каждый слот = 30 минут
+      const totalMinutes = occupiedSlots * 30;
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      
+      // Отображаем статистику
+      const statsDiv = document.getElementById('occupancyStats');
+      const hoursSpan = document.getElementById('weeklyHours');
+      const slotsSpan = document.getElementById('occupiedSlots');
+      
+      if (statsDiv && hoursSpan && slotsSpan) {
+        statsDiv.style.display = 'block';
+        slotsSpan.textContent = occupiedSlots;
+        
+        if (hours > 0 && minutes > 0) {
+          hoursSpan.textContent = `${hours} ч ${minutes} м`;
+        } else if (hours > 0) {
+          hoursSpan.textContent = `${hours} ч`;
+        } else if (minutes > 0) {
+          hoursSpan.textContent = `${minutes} м`;
+        } else {
+          hoursSpan.textContent = '0 ч';
+        }
+      }
+      
+      return { occupiedSlots, totalMinutes, hours, minutes };
+    }
+    
     // Рендер расписания
     function renderSchedule() {
       if (Object.keys(schedule).length === 0) {
@@ -506,6 +564,9 @@
             Расписание пустое. Нажмите на ячейки, чтобы настроить.
           </div>
         `;
+        // Скрываем статистику, если расписание пустое
+        const statsDiv = document.getElementById('occupancyStats');
+        if (statsDiv) statsDiv.style.display = 'none';
         return;
       }
       
@@ -536,6 +597,9 @@
       });
       
       document.getElementById('content').innerHTML = html;
+      
+      // Обновляем статистику занятости после рендера
+      calculateOccupancy();
     }
     
     // Переключение ячейки
@@ -582,6 +646,9 @@
           newNameDiv.textContent = studentName;
           element.appendChild(newNameDiv);
         }
+        
+        // Обновляем статистику занятости
+        calculateOccupancy();
         
         // Сохраняем в кеш сразу
         saveToCache(schedule);
@@ -1769,6 +1836,9 @@
           nameDivs[2].remove();
         }
       }
+      
+      // Обновляем статистику занятости
+      calculateOccupancy();
       
       // Сохраняем в кеш
       saveToCache(schedule);
