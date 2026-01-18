@@ -279,7 +279,6 @@
     <div style="display: flex; justify-content: center; align-items: center; gap: 8px;">
       <span style="color: #58a6ff; font-weight: 600;">⏰ Занятость за неделю:</span>
       <span id="weeklyHours" style="color: white; font-weight: 600;">0 ч</span>
-      <span style="color: #8b949e;">(<span id="occupiedSlots">0</span> слотов по 30 мин)</span>
     </div>
   </div>
   
@@ -536,11 +535,9 @@
       // Отображаем статистику
       const statsDiv = document.getElementById('occupancyStats');
       const hoursSpan = document.getElementById('weeklyHours');
-      const slotsSpan = document.getElementById('occupiedSlots');
       
-      if (statsDiv && hoursSpan && slotsSpan) {
+      if (statsDiv && hoursSpan) {
         statsDiv.style.display = 'block';
-        slotsSpan.textContent = occupiedSlots;
         
         if (hours > 0 && minutes > 0) {
           hoursSpan.textContent = `${hours} ч ${minutes} м`;
