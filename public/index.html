@@ -997,9 +997,10 @@
                   padding: 16px;
                   margin-bottom: 12px;
                   border-left: 4px solid #238636;
+                  position: relative;
                 ">
                   <div style="display: flex; justify-content: space-between; align-items: start;">
-                    <div style="flex: 1;">
+                    <div style="flex: 1; padding-right: 50px;">
                       <strong style="font-size: 16px;">${studentName}</strong>
                       <div style="font-size: 14px; color: #8b949e; margin-top: 8px;">
                         📅 ${new Date(lesson.lesson_date).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })}
@@ -1018,27 +1019,45 @@
                         </div>
                       ` : ''}
                     </div>
-                    <div style="display: flex; gap: 8px; margin-left: 12px;">
+                    <div style="
+                      position: absolute;
+                      top: 12px;
+                      right: 12px;
+                      display: flex;
+                      gap: 6px;
+                    ">
                       <button onclick="openEditLessonModal(${lesson.id})" style="
                         background: #1f6feb;
                         color: white;
                         border: none;
-                        padding: 8px 12px;
+                        padding: 6px 8px;
                         border-radius: 6px;
-                        font-size: 12px;
+                        font-size: 16px;
                         cursor: pointer;
-                        white-space: nowrap;
-                      ">✏️ Редактировать</button>
+                        width: 32px;
+                        height: 32px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        transition: background 0.2s;
+                        flex-shrink: 0;
+                      " onmouseover="this.style.background='#1565c0'" onmouseout="this.style.background='#1f6feb'">✏️</button>
                       <button onclick="deleteLesson(${lesson.id})" style="
                         background: #da3633;
                         color: white;
                         border: none;
-                        padding: 8px 12px;
+                        padding: 6px 8px;
                         border-radius: 6px;
-                        font-size: 12px;
+                        font-size: 16px;
                         cursor: pointer;
-                        white-space: nowrap;
-                      ">🗑️ Удалить</button>
+                        width: 32px;
+                        height: 32px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        transition: background 0.2s;
+                        flex-shrink: 0;
+                      " onmouseover="this.style.background='#c62828'" onmouseout="this.style.background='#da3633'">🗑️</button>
                     </div>
                   </div>
                 </div>
