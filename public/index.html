@@ -2177,6 +2177,19 @@
           const rowspanAttr = cell.rowspan > 1 ? `rowspan="${cell.rowspan}"` : '';
           const cellHeight = cell.rowspan > 1 ? cell.rowspan * 18 : 18;
           
+          // Вычисляем длительность занятия в часах
+          let durationText = '';
+          if (cell.studentName && cell.rowspan > 0) {
+            const hours = cell.rowspan * 0.5; // каждый слот = 0.5 часа
+            if (hours === 0.5) {
+              durationText = '30 мин';
+            } else if (hours === Math.floor(hours)) {
+              durationText = `${hours} ч`;
+            } else {
+              durationText = `${hours} ч`;
+            }
+          }
+          
           html += `
             <td ${rowspanAttr} style="
               background: ${bgColor};
@@ -2199,7 +2212,16 @@
                   line-height: 1.1;
                   overflow: hidden;
                   text-overflow: ellipsis;
+                  margin-bottom: 2px;
                 " title="${cell.studentName}">${cell.studentName.length > 10 ? cell.studentName.substring(0, 8) + '..' : cell.studentName}</div>
+                ${durationText ? `
+                  <div style="
+                    font-size: 6px;
+                    color: rgba(255, 255, 255, 0.7);
+                    margin-top: 1px;
+                    line-height: 1;
+                  ">${durationText}</div>
+                ` : ''}
               ` : ''}
             </td>
           `;
