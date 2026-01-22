@@ -536,7 +536,7 @@ app.get('/api/manager/teachers', requireAuth, async (req, res) => {
     
     const teachers = response.ok ? await response.json() : [];
     
-    // Получаем количество учеников для каждого преподавателя
+    // Получаем количество учеников и занятые часы для каждого преподавателя
     const teachersWithStats = await Promise.all(teachers.map(async (teacher) => {
       const studentsResponse = await fetch(
         `${SUPABASE_URL}/rest/v1/teacher_students?teacher_id=eq.${teacher.id}&select=student_id`,
@@ -544,9 +544,41 @@ app.get('/api/manager/teachers', requireAuth, async (req, res) => {
       );
       const students = studentsResponse.ok ? await studentsResponse.json() : [];
       
+      // Получаем расписание для расчета занятых часов
+      const scheduleResponse = await fetch(
+        `${SUPABASE_URL}/rest/v1/schedules?teacher_id=eq.${teacher.id}&select=status`,
+        { headers: createHeaders() }
+      );
+      const schedules = scheduleResponse.ok ? await scheduleResponse.json() : [];
+      
+      // Подсчитываем занятые слоты (статус 2 = занят)
+      let occupiedSlots = 0;
+      schedules.forEach(slot => {
+        if (slot.status === 2) {
+          occupiedSlots++;
+        }
+      });
+      
+      // Каждый слот = 30 минут
+      const totalMinutes = occupiedSlots * 30;
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      
+      // Форматируем строку с часами
+      let weeklyHoursText = '0 ч';
+      if (hours > 0 && minutes > 0) {
+        weeklyHoursText = `${hours} ч ${minutes} м`;
+      } else if (hours > 0) {
+        weeklyHoursText = `${hours} ч`;
+      } else if (minutes > 0) {
+        weeklyHoursText = `${minutes} м`;
+      }
+      
       return {
         ...teacher,
-        students_count: students.length
+        students_count: students.length,
+        weekly_hours: weeklyHoursText,
+        weekly_hours_minutes: totalMinutes
       };
     }));
     
