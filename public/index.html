@@ -1989,11 +1989,64 @@
     function renderCalendarView() {
       const FULL_DAYS = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
       const DAYS_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-      // Уменьшаем количество временных слотов для компактности - только каждый час
+      // Возвращаем слоты по 30 минут для точности
       const TIMES = [];
       for (let h = 8; h <= 22; h++) {
         TIMES.push(`${h.toString().padStart(2, '0')}:00`);
+        if (h < 22) TIMES.push(`${h.toString().padStart(2, '0')}:30`);
       }
+      
+      // Подготовка данных для объединения ячеек
+      const cellData = {};
+      FULL_DAYS.forEach(day => {
+        cellData[day] = {};
+        TIMES.forEach((time, timeIndex) => {
+          const slotValue = schedule[day]?.[time] || 0;
+          const state = typeof slotValue === 'object' ? slotValue.status : slotValue;
+          const studentName = typeof slotValue === 'object' && slotValue.student_name ? slotValue.student_name : null;
+          
+          // Проверяем, нужно ли объединять с предыдущим слотом
+          let rowspan = 1;
+          let shouldSkip = false;
+          
+          if (state === 2 && studentName && timeIndex > 0) {
+            const prevTime = TIMES[timeIndex - 1];
+            const prevSlotValue = schedule[day]?.[prevTime] || 0;
+            const prevState = typeof prevSlotValue === 'object' ? prevSlotValue.status : prevSlotValue;
+            const prevStudentName = typeof prevSlotValue === 'object' ? prevSlotValue.student_name : null;
+            
+            // Если предыдущий слот тоже занят тем же учеником, объединяем
+            if (prevState === 2 && prevStudentName === studentName) {
+              shouldSkip = true;
+            }
+          }
+          
+          if (!shouldSkip && state === 2 && studentName) {
+            // Проверяем, сколько следующих слотов заняты тем же учеником
+            let nextIndex = timeIndex + 1;
+            while (nextIndex < TIMES.length) {
+              const nextTime = TIMES[nextIndex];
+              const nextSlotValue = schedule[day]?.[nextTime] || 0;
+              const nextState = typeof nextSlotValue === 'object' ? nextSlotValue.status : nextSlotValue;
+              const nextStudentName = typeof nextSlotValue === 'object' ? nextSlotValue.student_name : null;
+              
+              if (nextState === 2 && nextStudentName === studentName) {
+                rowspan++;
+                nextIndex++;
+              } else {
+                break;
+              }
+            }
+          }
+          
+          cellData[day][time] = {
+            state,
+            studentName,
+            rowspan,
+            shouldSkip
+          };
+        });
+      });
       
       let html = `
         <div style="
@@ -2003,7 +2056,7 @@
           right: 0;
           bottom: 0;
           background: #0d1117;
-          padding: 10px;
+          padding: 8px;
           overflow: hidden;
           display: flex;
           flex-direction: column;
@@ -2012,18 +2065,18 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 10px;
-            padding: 8px 12px;
+            margin-bottom: 8px;
+            padding: 6px 10px;
             flex-shrink: 0;
           ">
-            <h2 style="margin: 0; color: white; font-size: 18px; font-weight: 600;">📅 Календарное расписание на неделю</h2>
+            <h2 style="margin: 0; color: white; font-size: 16px; font-weight: 600;">📅 Календарное расписание на неделю</h2>
             <button onclick="closeCalendarModal()" style="
               background: #da3633;
               color: white;
               border: none;
-              padding: 6px 12px;
+              padding: 5px 10px;
               border-radius: 6px;
-              font-size: 12px;
+              font-size: 11px;
               font-weight: 600;
               cursor: pointer;
               transition: background 0.2s;
@@ -2035,28 +2088,28 @@
           <div style="
             background: #161b22;
             border-radius: 8px;
-            padding: 8px;
+            padding: 6px;
             overflow: hidden;
             flex: 1;
             display: flex;
             flex-direction: column;
           ">
             <div style="overflow: auto; flex: 1;">
-              <table style="width: 100%; border-collapse: collapse; font-size: 10px; table-layout: fixed;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 9px; table-layout: fixed;">
                 <thead>
                   <tr>
                     <th style="
                       background: #21262d;
                       color: #c9d1d9;
-                      padding: 6px 4px;
+                      padding: 4px 3px;
                       text-align: center;
                       font-weight: 600;
                       border: 1px solid #30363d;
                       position: sticky;
                       left: 0;
                       z-index: 10;
-                      width: 50px;
-                      font-size: 9px;
+                      width: 45px;
+                      font-size: 8px;
                     ">Время</th>
       `;
       
@@ -2066,82 +2119,89 @@
           <th style="
             background: #21262d;
             color: #c9d1d9;
-            padding: 6px 4px;
+            padding: 4px 3px;
             text-align: center;
             font-weight: 600;
             border: 1px solid #30363d;
-            font-size: 10px;
+            font-size: 9px;
           ">
-            <div style="font-size: 11px; font-weight: 600;">${DAYS_SHORT[index]}</div>
-            <div style="font-size: 8px; color: #8b949e; margin-top: 2px; line-height: 1.1;">${day.substring(0, 4)}</div>
+            <div style="font-size: 10px; font-weight: 600;">${DAYS_SHORT[index]}</div>
+            <div style="font-size: 7px; color: #8b949e; margin-top: 1px; line-height: 1;">${day.substring(0, 4)}</div>
           </th>
         `;
       });
       
       html += `</tr></thead><tbody>`;
       
-      // Строки с временем и данными - компактные
-      TIMES.forEach(time => {
+      // Строки с временем и данными - компактные с объединением
+      TIMES.forEach((time, timeIndex) => {
         html += `<tr>`;
         
-        // Ячейка времени (sticky) - компактная
+        // Ячейка времени (sticky) - компактная, показываем только для :00
+        const timeDisplay = time.endsWith(':00') ? time.substring(0, 2) : '';
         html += `
           <td style="
             background: #161b22;
             color: #8b949e;
-            padding: 4px 2px;
+            padding: 2px 1px;
             text-align: center;
             border: 1px solid #30363d;
             position: sticky;
             left: 0;
             z-index: 5;
             font-weight: 600;
-            font-size: 9px;
-            width: 50px;
-          ">${time}</td>
+            font-size: 8px;
+            width: 45px;
+            height: 18px;
+          ">${timeDisplay}</td>
         `;
         
-        // Ячейки для каждого дня - компактные
+        // Ячейки для каждого дня - компактные с объединением
         FULL_DAYS.forEach(day => {
-          const slotValue = schedule[day]?.[time] || 0;
-          const state = typeof slotValue === 'object' ? slotValue.status : slotValue;
-          const studentName = typeof slotValue === 'object' && slotValue.student_name ? slotValue.student_name : null;
+          const cell = cellData[day][time];
+          
+          // Пропускаем ячейки, которые объединены с предыдущими
+          if (cell.shouldSkip) {
+            return;
+          }
           
           let bgColor = '#21262d';
           let textColor = '#8b949e';
           
-          if (state === 1) {
+          if (cell.state === 1) {
             bgColor = '#238636';
             textColor = 'white';
-          } else if (state === 2) {
+          } else if (cell.state === 2) {
             bgColor = '#da3633';
             textColor = 'white';
           }
           
+          const rowspanAttr = cell.rowspan > 1 ? `rowspan="${cell.rowspan}"` : '';
+          const cellHeight = cell.rowspan > 1 ? cell.rowspan * 18 : 18;
+          
           html += `
-            <td style="
+            <td ${rowspanAttr} style="
               background: ${bgColor};
               color: ${textColor};
-              padding: 3px 2px;
+              padding: 2px 1px;
               border: 1px solid #30363d;
               text-align: center;
               vertical-align: middle;
-              height: 28px;
-              font-size: 9px;
+              height: ${cellHeight}px;
+              font-size: 8px;
             ">
-              ${studentName ? `
+              ${cell.studentName ? `
                 <div style="
-                  font-size: 9px;
+                  font-size: 8px;
                   font-weight: 600;
-                  padding: 2px 3px;
+                  padding: 1px 2px;
                   background: rgba(255, 255, 255, 0.2);
-                  border-radius: 3px;
+                  border-radius: 2px;
                   word-break: break-word;
-                  line-height: 1.2;
+                  line-height: 1.1;
                   overflow: hidden;
                   text-overflow: ellipsis;
-                  max-height: 24px;
-                " title="${studentName}">${studentName.length > 12 ? studentName.substring(0, 10) + '...' : studentName}</div>
+                " title="${cell.studentName}">${cell.studentName.length > 10 ? cell.studentName.substring(0, 8) + '..' : cell.studentName}</div>
               ` : ''}
             </td>
           `;
