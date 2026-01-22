@@ -557,6 +557,7 @@
             </div>
             <div class="teacher-stats">
               <span>👥 Учеников: ${teacher.students_count || 0}</span>
+              <span>⏰ Занятость: ${teacher.weekly_hours || '0 ч'}</span>
             </div>
           </div>
         `;
@@ -591,6 +592,40 @@
     function renderTeacherDetail(data) {
       const { teacher, schedule, subjects, students } = data;
       
+      // Подсчитываем занятые часы из расписания
+      let occupiedSlots = 0;
+      const FULL_DAYS = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
+      const TIMES = [];
+      for (let h = 8; h <= 22; h++) {
+        TIMES.push(`${h.toString().padStart(2, '0')}:00`);
+        if (h < 22) TIMES.push(`${h.toString().padStart(2, '0')}:30`);
+      }
+      
+      FULL_DAYS.forEach(day => {
+        TIMES.forEach(time => {
+          const slotValue = schedule[day]?.[time] || 0;
+          const state = typeof slotValue === 'object' ? slotValue.status : slotValue;
+          if (state === 2) {
+            occupiedSlots++;
+          }
+        });
+      });
+      
+      // Каждый слот = 30 минут
+      const totalMinutes = occupiedSlots * 30;
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      
+      // Форматируем строку с часами
+      let weeklyHoursText = '0 ч';
+      if (hours > 0 && minutes > 0) {
+        weeklyHoursText = `${hours} ч ${minutes} м`;
+      } else if (hours > 0) {
+        weeklyHoursText = `${hours} ч`;
+      } else if (minutes > 0) {
+        weeklyHoursText = `${minutes} м`;
+      }
+      
       let html = `
         <button class="back-btn" onclick="loadTeachers()">
           <span style="font-size: 18px;">←</span>
@@ -613,6 +648,10 @@
             <div class="section-title">Преподаватель</div>
             <div style="font-size: 18px; font-weight: 600; margin-bottom: 16px;">
               ${teacher.first_name} ${teacher.last_name || ''}
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 12px; background: #21262d; border-radius: 8px;">
+              <span style="color: #58a6ff; font-weight: 600;">⏰ Занятость за неделю:</span>
+              <span style="color: white; font-weight: 600; font-size: 16px;">${weeklyHoursText}</span>
             </div>
           </div>
           
