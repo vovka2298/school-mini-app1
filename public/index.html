@@ -2126,7 +2126,6 @@
             font-size: 9px;
           ">
             <div style="font-size: 10px; font-weight: 600;">${DAYS_SHORT[index]}</div>
-            <div style="font-size: 7px; color: #8b949e; margin-top: 1px; line-height: 1;">${day.substring(0, 4)}</div>
           </th>
         `;
       });
@@ -2137,8 +2136,7 @@
       TIMES.forEach((time, timeIndex) => {
         html += `<tr>`;
         
-        // Ячейка времени (sticky) - компактная, показываем только для :00
-        const timeDisplay = time.endsWith(':00') ? time.substring(0, 2) : '';
+        // Ячейка времени (sticky) - показываем полное время для каждого слота
         html += `
           <td style="
             background: #161b22;
@@ -2153,7 +2151,7 @@
             font-size: 8px;
             width: 45px;
             height: 18px;
-          ">${timeDisplay}</td>
+          ">${time}</td>
         `;
         
         // Ячейки для каждого дня - компактные с объединением
