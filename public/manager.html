@@ -763,10 +763,15 @@
       
       document.getElementById('content').innerHTML = html;
       
-      // Устанавливаем сегодняшнюю дату по умолчанию
+      // Устанавливаем даты по умолчанию: с понедельника текущей недели по сегодня
       const today = new Date();
-      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-      document.getElementById('startDate').value = firstDay.toISOString().split('T')[0];
+      const monday = new Date(today);
+      // Получаем день недели (0 = воскресенье, 1 = понедельник, ..., 6 = суббота)
+      const dayOfWeek = today.getDay();
+      // Вычисляем количество дней до понедельника
+      const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+      monday.setDate(today.getDate() - daysToMonday);
+      document.getElementById('startDate').value = monday.toISOString().split('T')[0];
       document.getElementById('endDate').value = today.toISOString().split('T')[0];
     }
     
