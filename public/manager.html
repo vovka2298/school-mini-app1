@@ -450,6 +450,32 @@
       </form>
     </div>
   </div>
+  
+  <!-- Модальное окно для редактирования ученика -->
+  <div class="modal" id="editStudentModal">
+    <div class="modal-content">
+      <div class="modal-title">Редактировать ученика</div>
+      <form id="editStudentForm" onsubmit="updateStudent(event)">
+        <input type="hidden" id="editStudentId">
+        <div class="form-group">
+          <label class="form-label">Имя *</label>
+          <input type="text" class="form-input" id="editStudentFirstName" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Фамилия</label>
+          <input type="text" class="form-input" id="editStudentLastName">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Класс</label>
+          <input type="text" class="form-input" id="editStudentClass" placeholder="Например: 10А">
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" onclick="closeEditStudentModal()">Отмена</button>
+          <button type="submit" class="btn btn-primary">Сохранить</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <script>
     // Telegram Web App
@@ -670,9 +696,31 @@
             <div class="section-title">Ученики (${students.length})</div>
             ${students.length > 0 ? students.map(s => `
               <div class="student-item">
-                <div>
+                <div style="flex: 1;">
                   <div class="student-name">${s.first_name} ${s.last_name || ''}</div>
                   ${s.class_name ? `<div class="student-class">Класс: ${s.class_name}</div>` : ''}
+                </div>
+                <div style="display: flex; gap: 8px;">
+                  <button onclick="openEditStudentModal(${s.id}, '${s.first_name}', '${s.last_name || ''}', '${s.class_name || ''}')" style="
+                    background: #1f6feb;
+                    color: white;
+                    border: none;
+                    padding: 6px 12px;
+                    border-radius: 6px;
+                    font-size: 12px;
+                    cursor: pointer;
+                    white-space: nowrap;
+                  ">✏️ Редактировать</button>
+                  <button onclick="deleteStudent(${s.id})" style="
+                    background: #da3633;
+                    color: white;
+                    border: none;
+                    padding: 6px 12px;
+                    border-radius: 6px;
+                    font-size: 12px;
+                    cursor: pointer;
+                    white-space: nowrap;
+                  ">🗑️ Удалить</button>
                 </div>
               </div>
             `).join('') : '<div style="color: #8b949e; text-align: center; padding: 20px;">Нет учеников</div>'}
@@ -1270,6 +1318,95 @@
     window.openAddStudentModal = openAddStudentModal;
     window.closeAddStudentModal = closeAddStudentModal;
     window.addStudent = addStudent;
+    
+    // Модальное окно для редактирования ученика
+    function openEditStudentModal(studentId, firstName, lastName, className) {
+      document.getElementById('editStudentId').value = studentId;
+      document.getElementById('editStudentFirstName').value = firstName;
+      document.getElementById('editStudentLastName').value = lastName || '';
+      document.getElementById('editStudentClass').value = className || '';
+      document.getElementById('editStudentModal').classList.add('active');
+      document.getElementById('editStudentFirstName').focus();
+    }
+    
+    function closeEditStudentModal() {
+      document.getElementById('editStudentModal').classList.remove('active');
+      document.getElementById('editStudentForm').reset();
+    }
+    
+    async function updateStudent(event) {
+      event.preventDefault();
+      
+      const studentId = document.getElementById('editStudentId').value;
+      const firstName = document.getElementById('editStudentFirstName').value.trim();
+      const lastName = document.getElementById('editStudentLastName').value.trim();
+      const className = document.getElementById('editStudentClass').value.trim();
+      
+      try {
+        const response = await fetch(
+          `/api/manager/student/${studentId}?tgId=${MY_TG_ID}`,
+          {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              first_name: firstName,
+              last_name: lastName,
+              class_name: className || null
+            })
+          }
+        );
+        
+        const result = await response.json();
+        
+        if (response.ok && result.ok) {
+          showNotice('Ученик успешно обновлен', 'success');
+          closeEditStudentModal();
+          // Обновляем данные преподавателя
+          showTeacherDetail(currentTeacherId);
+        } else {
+          showNotice(result.error || 'Ошибка обновления ученика', 'error');
+        }
+        
+      } catch (error) {
+        console.error('Ошибка обновления ученика:', error);
+        showNotice('Ошибка обновления ученика', 'error');
+      }
+    }
+    
+    async function deleteStudent(studentId) {
+      if (!confirm('Вы уверены, что хотите удалить этого ученика у данного преподавателя?')) {
+        return;
+      }
+      
+      try {
+        const response = await fetch(
+          `/api/manager/teacher/${currentTeacherId}/student/${studentId}?tgId=${MY_TG_ID}`,
+          {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' }
+          }
+        );
+        
+        const result = await response.json();
+        
+        if (response.ok && result.ok) {
+          showNotice('Ученик успешно удален', 'success');
+          // Обновляем данные преподавателя
+          showTeacherDetail(currentTeacherId);
+        } else {
+          showNotice(result.error || 'Ошибка удаления ученика', 'error');
+        }
+        
+      } catch (error) {
+        console.error('Ошибка удаления ученика:', error);
+        showNotice('Ошибка удаления ученика', 'error');
+      }
+    }
+    
+    window.openEditStudentModal = openEditStudentModal;
+    window.closeEditStudentModal = closeEditStudentModal;
+    window.updateStudent = updateStudent;
+    window.deleteStudent = deleteStudent;
     
     // Запуск
     if (document.readyState === 'loading') {
