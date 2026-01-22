@@ -771,8 +771,15 @@
       // Вычисляем количество дней до понедельника
       const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
       monday.setDate(today.getDate() - daysToMonday);
-      document.getElementById('startDate').value = monday.toISOString().split('T')[0];
-      document.getElementById('endDate').value = today.toISOString().split('T')[0];
+      // Форматируем даты в локальном времени (избегаем проблем с UTC)
+      const formatDate = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+      document.getElementById('startDate').value = formatDate(monday);
+      document.getElementById('endDate').value = formatDate(today);
     }
     
     // Рендер расписания
