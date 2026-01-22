@@ -261,6 +261,22 @@
     <div class="tab" onclick="showSubjects()">Предметы</div>
   </div>
   
+  <div style="padding: 12px 16px; background: #161b22; border-bottom: 1px solid #30363d; text-align: center;">
+    <button onclick="showCalendarView()" style="
+      background: #1f6feb;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    " onmouseover="this.style.background='#1565c0'" onmouseout="this.style.background='#1f6feb'">
+      📅 Календарный вид расписания
+    </button>
+  </div>
+  
   <div class="legend">
     <div class="legend-item"><div class="legend-box" style="background:#21262d"></div>Не работаю</div>
     <div class="legend-item"><div class="legend-box" style="background:#238636"></div>Свободен</div>
@@ -683,6 +699,12 @@
     function showSchedule() {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.tab')[0].classList.add('active');
+      // Показываем легенду и статистику обратно
+      document.querySelector('.legend').style.display = 'flex';
+      const statsDiv = document.getElementById('occupancyStats');
+      if (statsDiv && Object.keys(schedule).length > 0) {
+        statsDiv.style.display = 'block';
+      }
       loadSchedule();
     }
     
@@ -1927,6 +1949,164 @@
     window.closeStudentNameModal = closeStudentNameModal;
     window.saveStudentName = saveStudentName;
     window.clearStudentName = clearStudentName;
+    
+    // Календарный вид расписания
+    function showCalendarView() {
+      // Переключаемся на вкладку расписания
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab')[0].classList.add('active');
+      
+      // Загружаем расписание если еще не загружено
+      if (Object.keys(schedule).length === 0) {
+        loadSchedule(true);
+        setTimeout(() => renderCalendarView(), 500);
+        return;
+      }
+      
+      renderCalendarView();
+    }
+    
+    function renderCalendarView() {
+      const FULL_DAYS = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
+      const DAYS_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+      const TIMES = [];
+      for (let h = 8; h <= 22; h++) {
+        TIMES.push(`${h.toString().padStart(2, '0')}:00`);
+        if (h < 22) TIMES.push(`${h.toString().padStart(2, '0')}:30`);
+      }
+      
+      let html = `
+        <div style="padding: 16px; background: #0d1117;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h2 style="margin: 0; color: white; font-size: 20px;">📅 Календарное расписание на неделю</h2>
+            <button onclick="showSchedule()" style="
+              background: #21262d;
+              color: white;
+              border: none;
+              padding: 8px 16px;
+              border-radius: 8px;
+              font-size: 14px;
+              cursor: pointer;
+            ">← Вернуться к обычному виду</button>
+          </div>
+          
+          <div style="background: #161b22; border-radius: 12px; padding: 16px; overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+              <thead>
+                <tr>
+                  <th style="
+                    background: #21262d;
+                    color: #c9d1d9;
+                    padding: 12px 8px;
+                    text-align: left;
+                    font-weight: 600;
+                    border: 1px solid #30363d;
+                    position: sticky;
+                    left: 0;
+                    z-index: 10;
+                    min-width: 80px;
+                  ">Время</th>
+      `;
+      
+      // Заголовки дней недели
+      FULL_DAYS.forEach((day, index) => {
+        html += `
+          <th style="
+            background: #21262d;
+            color: #c9d1d9;
+            padding: 12px 8px;
+            text-align: center;
+            font-weight: 600;
+            border: 1px solid #30363d;
+            min-width: 120px;
+          ">
+            <div>${DAYS_SHORT[index]}</div>
+            <div style="font-size: 10px; color: #8b949e; margin-top: 4px;">${day}</div>
+          </th>
+        `;
+      });
+      
+      html += `</tr></thead><tbody>`;
+      
+      // Строки с временем и данными
+      TIMES.forEach(time => {
+        html += `<tr>`;
+        
+        // Ячейка времени (sticky)
+        html += `
+          <td style="
+            background: #161b22;
+            color: #8b949e;
+            padding: 8px;
+            text-align: center;
+            border: 1px solid #30363d;
+            position: sticky;
+            left: 0;
+            z-index: 5;
+            font-weight: 600;
+          ">${time}</td>
+        `;
+        
+        // Ячейки для каждого дня
+        FULL_DAYS.forEach(day => {
+          const slotValue = schedule[day]?.[time] || 0;
+          const state = typeof slotValue === 'object' ? slotValue.status : slotValue;
+          const studentName = typeof slotValue === 'object' && slotValue.student_name ? slotValue.student_name : null;
+          
+          let bgColor = '#21262d';
+          let textColor = '#8b949e';
+          let statusText = 'Не работаю';
+          
+          if (state === 1) {
+            bgColor = '#238636';
+            textColor = 'white';
+            statusText = 'Свободен';
+          } else if (state === 2) {
+            bgColor = '#da3633';
+            textColor = 'white';
+            statusText = 'Занят';
+          }
+          
+          html += `
+            <td style="
+              background: ${bgColor};
+              color: ${textColor};
+              padding: 8px;
+              border: 1px solid #30363d;
+              text-align: center;
+              vertical-align: top;
+              min-height: 60px;
+            ">
+              <div style="font-size: 10px; margin-bottom: 4px; opacity: 0.8;">${statusText}</div>
+              ${studentName ? `
+                <div style="
+                  font-size: 11px;
+                  font-weight: 600;
+                  margin-top: 4px;
+                  padding: 4px 6px;
+                  background: rgba(255, 255, 255, 0.15);
+                  border-radius: 4px;
+                  word-break: break-word;
+                ">${studentName}</div>
+              ` : ''}
+            </td>
+          `;
+        });
+        
+        html += `</tr>`;
+      });
+      
+      html += `</tbody></table></div></div>`;
+      
+      document.getElementById('content').innerHTML = html;
+      
+      // Скрываем легенду и статистику для календарного вида
+      document.querySelector('.legend').style.display = 'none';
+      const statsDiv = document.getElementById('occupancyStats');
+      if (statsDiv) statsDiv.style.display = 'none';
+    }
+    
+    window.showCalendarView = showCalendarView;
   </script>
 </body>
 </html>
