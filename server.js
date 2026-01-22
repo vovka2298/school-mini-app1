@@ -696,7 +696,7 @@ app.post('/api/manager/teacher/:teacherId/student', requireAuth, async (req, res
       return res.status(400).json({ error: 'Необходимо указать имя', _timestamp: Date.now() });
     }
     
-    // Создаем или находим ученика
+    // Всегда создаем нового ученика (даже если имя совпадает с существующим)
     // В базе данных last_name имеет NOT NULL constraint, поэтому передаем пустую строку вместо null
     const studentData = {
       first_name: first_name.trim(),
@@ -704,79 +704,55 @@ app.post('/api/manager/teacher/:teacherId/student', requireAuth, async (req, res
       class_name: (class_name && class_name.trim().length > 0) ? class_name.trim() : null
     };
     
-    // Проверяем, существует ли уже такой ученик (только по имени, если фамилии нет)
-    let existingQuery = `first_name=eq.${encodeURIComponent(studentData.first_name)}`;
-    if (studentData.last_name && studentData.last_name.length > 0) {
-      existingQuery += `&last_name=eq.${encodeURIComponent(studentData.last_name)}`;
-    } else {
-      existingQuery += `&last_name=eq.${encodeURIComponent('')}`;
+    // Создаем нового ученика
+    // Используем Prefer: return=representation чтобы получить созданную запись
+    const createHeadersWithReturn = {
+      ...createHeaders(true),
+      'Prefer': 'return=representation'
+    };
+    
+    const createResponse = await fetch(
+      `${SUPABASE_URL}/rest/v1/students`,
+      {
+        method: 'POST',
+        headers: createHeadersWithReturn,
+        body: JSON.stringify(studentData)
+      }
+    );
+    
+    if (!createResponse.ok) {
+      const errorText = await createResponse.text();
+      console.error('❌ Ошибка создания ученика:', errorText);
+      throw new Error(`Ошибка создания ученика: ${errorText}`);
     }
     
-    const existingResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/students?${existingQuery}&select=id`,
-      { headers: createHeaders() }
-    );
-    const existing = existingResponse.ok ? await existingResponse.json() : [];
-    
+    // Получаем созданного ученика из ответа
+    const createdStudents = await createResponse.json();
     let studentId;
-    if (existing.length > 0) {
-      studentId = existing[0].id;
+    
+    // Supabase может вернуть массив или объект
+    if (Array.isArray(createdStudents) && createdStudents.length > 0) {
+      studentId = createdStudents[0].id;
+    } else if (createdStudents.id) {
+      studentId = createdStudents.id;
     } else {
-      // Создаем нового ученика
-      const createResponse = await fetch(
-        `${SUPABASE_URL}/rest/v1/students`,
-        {
-          method: 'POST',
-          headers: createHeaders(true),
-          body: JSON.stringify(studentData)
-        }
+      // Если не получили ID из ответа, пытаемся найти последнего созданного ученика
+      // Используем timestamp для более точного поиска
+      console.log('ℹ️ Получаем созданного ученика из базы...');
+      const findResponse = await fetch(
+        `${SUPABASE_URL}/rest/v1/students?first_name=eq.${encodeURIComponent(studentData.first_name)}&last_name=eq.${encodeURIComponent(studentData.last_name)}&order=created_at.desc&limit=1&select=id`,
+        { headers: createHeaders() }
       );
-      
-      if (!createResponse.ok) {
-        const errorText = await createResponse.text();
-        console.error('❌ Ошибка создания ученика:', errorText);
-        throw new Error(`Ошибка создания ученика: ${errorText}`);
-      }
-      
-      // Supabase с return=minimal может вернуть пустой ответ
-      const responseText = await createResponse.text();
-      let newStudent = null;
-      
-      if (responseText && responseText.trim().length > 0) {
-        try {
-          newStudent = JSON.parse(responseText);
-        } catch (e) {
-          console.warn('⚠️ Не удалось распарсить ответ от Supabase, но ученик создан');
+      if (findResponse.ok) {
+        const found = await findResponse.json();
+        if (found.length > 0) {
+          studentId = found[0].id;
         }
       }
-      
-      // Если не получили данные из ответа, получаем созданного ученика из базы
-      if (!newStudent || (!newStudent.id && (!newStudent[0] || !newStudent[0].id))) {
-        console.log('ℹ️ Получаем созданного ученика из базы...');
-        let findQuery = `first_name=eq.${encodeURIComponent(studentData.first_name)}`;
-        if (studentData.last_name && studentData.last_name.length > 0) {
-          findQuery += `&last_name=eq.${encodeURIComponent(studentData.last_name)}`;
-        } else {
-          findQuery += `&last_name=eq.${encodeURIComponent('')}`;
-        }
-        
-        const findResponse = await fetch(
-          `${SUPABASE_URL}/rest/v1/students?${findQuery}&order=created_at.desc&limit=1&select=id`,
-          { headers: createHeaders() }
-        );
-        if (findResponse.ok) {
-          const found = await findResponse.json();
-          if (found.length > 0) {
-            studentId = found[0].id;
-          }
-        }
-      } else {
-        studentId = newStudent[0]?.id || newStudent.id;
-      }
-      
-      if (!studentId) {
-        throw new Error('Не удалось получить ID созданного ученика');
-      }
+    }
+    
+    if (!studentId) {
+      throw new Error('Не удалось получить ID созданного ученика');
     }
     
     // Связываем ученика с преподавателем
