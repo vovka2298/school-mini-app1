@@ -821,6 +821,89 @@ app.post('/api/manager/teacher/:teacherId/student', requireAuth, async (req, res
   }
 });
 
+// 14.1. Редактировать ученика
+app.put('/api/manager/student/:studentId', requireAuth, async (req, res) => {
+  try {
+    if (req.user.role !== 'manager') {
+      return res.status(403).json({ error: 'Доступ запрещен', _timestamp: Date.now() });
+    }
+    
+    const { studentId } = req.params;
+    const { first_name, last_name, class_name } = req.body;
+    
+    if (!first_name || first_name.trim().length === 0) {
+      return res.status(400).json({ error: 'Необходимо указать имя', _timestamp: Date.now() });
+    }
+    
+    const updateData = {
+      first_name: first_name.trim(),
+      last_name: (last_name && last_name.trim().length > 0) ? last_name.trim() : '',
+      class_name: (class_name && class_name.trim().length > 0) ? class_name.trim() : null
+    };
+    
+    const updateResponse = await fetch(
+      `${SUPABASE_URL}/rest/v1/students?id=eq.${studentId}`,
+      {
+        method: 'PATCH',
+        headers: createHeaders(true),
+        body: JSON.stringify(updateData)
+      }
+    );
+    
+    if (!updateResponse.ok) {
+      const errorText = await updateResponse.text();
+      console.error('❌ Ошибка обновления ученика:', errorText);
+      throw new Error(`Ошибка обновления ученика: ${errorText}`);
+    }
+    
+    res.json({
+      ok: true,
+      message: 'Ученик успешно обновлен',
+      _timestamp: Date.now()
+    });
+    
+  } catch (error) {
+    console.error('❌ Ошибка обновления ученика:', error);
+    res.status(500).json({ error: error.message, _timestamp: Date.now() });
+  }
+});
+
+// 14.2. Удалить ученика у преподавателя
+app.delete('/api/manager/teacher/:teacherId/student/:studentId', requireAuth, async (req, res) => {
+  try {
+    if (req.user.role !== 'manager') {
+      return res.status(403).json({ error: 'Доступ запрещен', _timestamp: Date.now() });
+    }
+    
+    const { teacherId, studentId } = req.params;
+    
+    // Удаляем связь между преподавателем и учеником
+    const deleteResponse = await fetch(
+      `${SUPABASE_URL}/rest/v1/teacher_students?teacher_id=eq.${teacherId}&student_id=eq.${studentId}`,
+      {
+        method: 'DELETE',
+        headers: createHeaders(true)
+      }
+    );
+    
+    if (!deleteResponse.ok) {
+      const errorText = await deleteResponse.text();
+      console.error('❌ Ошибка удаления связи:', errorText);
+      throw new Error(`Ошибка удаления связи: ${errorText}`);
+    }
+    
+    res.json({
+      ok: true,
+      message: 'Ученик успешно удален у преподавателя',
+      _timestamp: Date.now()
+    });
+    
+  } catch (error) {
+    console.error('❌ Ошибка удаления ученика:', error);
+    res.status(500).json({ error: error.message, _timestamp: Date.now() });
+  }
+});
+
 // 15. Получить статистику по часам преподавателя
 app.get('/api/manager/teacher/:teacherId/statistics', requireAuth, async (req, res) => {
   try {
