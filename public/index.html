@@ -235,6 +235,50 @@
       text-align: center;
       margin-top: 10px;
     }
+
+    .statistics-section {
+      background: #161b22;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      border: 1px solid #30363d;
+    }
+    .date-filter {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .date-input {
+      flex: 1;
+      min-width: 140px;
+      padding: 10px;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      color: white;
+      font-size: 14px;
+    }
+    .stat-summary {
+      background: #21262d;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .stat-item {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .stat-label { color: #8b949e; }
+    .stat-value { font-weight: 600; color: white; }
+    .student-stat {
+      background: #21262d;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 8px;
+    }
+    .student-stat-header { font-weight: 600; margin-bottom: 8px; color: white; }
   </style>
 </head>
 <body>
@@ -258,7 +302,7 @@
     <div class="tab active" onclick="showSchedule()">Расписание</div>
     <div class="tab" onclick="showBookings()">Ученики</div>
     <div class="tab" onclick="showLessons()">Занятия</div>
-    <div class="tab" onclick="showSubjects()">Предметы</div>
+    <div class="tab" onclick="showStatistics()">Статистика</div>
   </div>
   
   <div style="padding: 8px 16px; background: #161b22; border-bottom: 1px solid #30363d; display: flex; justify-content: flex-start; align-items: center;">
@@ -925,10 +969,135 @@
       }
     };
     
-    function showSubjects() {
-      window.location.href = '/subjects.html';
+    // Понедельник текущей недели и сегодня по Москве
+    function getMoscowMondayAndToday() {
+      const now = new Date();
+      const moscowOffset = 3 * 60 * 60 * 1000;
+      const moscowNow = new Date(now.getTime() + moscowOffset);
+      const y = moscowNow.getUTCFullYear();
+      const m = moscowNow.getUTCMonth();
+      const d = moscowNow.getUTCDate();
+      const dayOfWeek = moscowNow.getUTCDay();
+      const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+      const mondayDate = new Date(Date.UTC(y, m, d - daysToMonday));
+      const todayStr = y + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+      const mondayStr = mondayDate.getUTCFullYear() + '-' + String(mondayDate.getUTCMonth() + 1).padStart(2, '0') + '-' + String(mondayDate.getUTCDate()).padStart(2, '0');
+      return { start: mondayStr, end: todayStr };
     }
-    
+
+    async function showStatistics() {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab')[3].classList.add('active');
+
+      const { start, end } = getMoscowMondayAndToday();
+
+      const html = `
+        <div class="statistics-section" style="padding: 16px;">
+          <div class="section-title" style="font-weight: 600; margin-bottom: 12px;">Период для расчёта</div>
+          <div class="date-filter">
+            <input type="date" class="date-input" id="statStartDate" value="${start}" onchange="loadStatisticsTeacher()">
+            <input type="date" class="date-input" id="statEndDate" value="${end}" onchange="loadStatisticsTeacher()">
+          </div>
+          <div id="statisticsContent">
+            <div class="loading">Загрузка статистики...</div>
+          </div>
+        </div>
+      `;
+      document.getElementById('content').innerHTML = html;
+      await loadStatisticsTeacher();
+    }
+
+    function toggleStudentDetails(studentId, arrowId) {
+      const detailsDiv = document.getElementById(studentId);
+      const arrowDiv = document.getElementById(arrowId);
+      if (detailsDiv) {
+        const isHidden = detailsDiv.style.display === 'none' || !detailsDiv.style.display;
+        detailsDiv.style.display = isHidden ? 'block' : 'none';
+        if (arrowDiv) arrowDiv.style.transform = isHidden ? 'rotate(90deg)' : 'rotate(0)';
+      }
+    }
+
+    async function loadStatisticsTeacher() {
+      const startEl = document.getElementById('statStartDate');
+      const endEl = document.getElementById('statEndDate');
+      const contentEl = document.getElementById('statisticsContent');
+      if (!startEl || !endEl || !contentEl) return;
+
+      const startDate = startEl.value;
+      const endDate = endEl.value;
+      if (!startDate || !endDate) return;
+
+      try {
+        contentEl.innerHTML = '<div class="loading">Загрузка статистики...</div>';
+        const response = await fetch('/api/teacher/statistics?tgId=' + (typeof MY_ID !== 'undefined' ? MY_ID : '') + '&start_date=' + startDate + '&end_date=' + endDate + '&t=' + Date.now());
+        const data = await response.json();
+        if (!response.ok) {
+          contentEl.innerHTML = '<div class="error">' + (data.error || 'Ошибка загрузки статистики') + '</div>';
+          return;
+        }
+
+        let html = `
+          <div class="stat-summary">
+            <div class="stat-item">
+              <span class="stat-label">Всего занятий:</span>
+              <span class="stat-value">${data.total_lessons || 0}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Всего часов:</span>
+              <span class="stat-value">${data.total_hours || 0} ч</span>
+            </div>
+          </div>
+        `;
+
+        if (data.by_student && data.by_student.length > 0) {
+          html += '<div class="section-title" style="margin-top: 16px; font-weight: 600;">По ученикам</div>';
+          data.by_student.forEach((stat, index) => {
+            const studentName = ((stat.student.first_name || '') + ' ' + (stat.student.last_name || '')).trim();
+            const studentId = 'stat-student-' + index;
+            const arrowId = 'stat-arrow-' + index;
+            html += `
+              <div class="student-stat" style="cursor: pointer; transition: background 0.2s;"
+                   onclick="toggleStudentDetails('${studentId}', '${arrowId}')"
+                   onmouseover="this.style.background='#1c2128'" onmouseout="this.style.background='#21262d'">
+                <div class="student-stat-header" style="display: flex; justify-content: space-between; align-items: center;">
+                  <div>
+                    <strong>${studentName}</strong>
+                    ${stat.student.class_name ? ' <span style="color: #8b949e;">(' + stat.student.class_name + ')</span>' : ''}
+                  </div>
+                  <div id="${arrowId}" style="font-size: 12px; color: #8b949e; transition: transform 0.2s;">▶</div>
+                </div>
+                <div style="font-size: 14px; color: #8b949e; margin-top: 4px;">
+                  Занятий: ${stat.lessons_count} | Часов: ${stat.total_hours} ч
+                </div>
+                <div id="${studentId}" style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid #30363d;">
+                  ${stat.lessons && stat.lessons.length > 0 ? stat.lessons.map(function(lesson) {
+                    const date = new Date(lesson.date).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', weekday: 'short' });
+                    const dm = lesson.duration_minutes || 0;
+                    const h = Math.floor(dm / 60);
+                    const min = dm % 60;
+                    const durationText = h > 0 ? h + 'ч ' + min + 'м' : min + 'м';
+                    return '<div style="background: #0d1117; border-radius: 8px; padding: 12px; margin-bottom: 8px; border-left: 3px solid #238636;">' +
+                      '<div style="font-size: 14px; margin-bottom: 6px; font-weight: 500;">📅 ' + date + '</div>' +
+                      '<div style="font-size: 13px; color: #8b949e;">⏰ ' + lesson.start_time + ' - ' + lesson.end_time + (lesson.duration_minutes ? ' <span style="color: #58a6ff;">(' + durationText + ')</span>' : '') + '</div>' +
+                      (lesson.subject ? '<div style="font-size: 13px; color: #58a6ff; margin-top: 4px;">📚 ' + lesson.subject + '</div>' : '') +
+                      (lesson.notes ? '<div style="font-size: 12px; color: #8b949e; margin-top: 6px; padding-top: 6px; border-top: 1px solid #30363d;">' + lesson.notes + '</div>' : '') +
+                      '</div>';
+                  }).join('') : '<div style="color: #8b949e; font-size: 13px;">Нет деталей занятий</div>'}
+                </div>
+              </div>
+            `;
+          });
+        } else {
+          html += '<div style="color: #8b949e; text-align: center; padding: 20px;">Нет данных за выбранный период</div>';
+        }
+
+        contentEl.innerHTML = html;
+      } catch (err) {
+        console.error('Ошибка загрузки статистики:', err);
+        contentEl.innerHTML = '<div class="error">Ошибка загрузки статистики</div>';
+      }
+    }
+
     // Функция для загрузки и отображения занятий
     async function showLessons() {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -1902,7 +2071,9 @@
     window.forceRefresh = forceRefresh;
     window.showSchedule = showSchedule;
     window.showBookings = showBookings;
-    window.showSubjects = showSubjects;
+    window.showStatistics = showStatistics;
+    window.loadStatisticsTeacher = loadStatisticsTeacher;
+    window.toggleStudentDetails = toggleStudentDetails;
     window.toggleSlot = toggleSlot;
     // Обработчик touch для долгого нажатия на мобильных устройствах
     function handleSlotTouchStart(event, day, time, state) {
