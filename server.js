@@ -994,6 +994,88 @@ app.get('/api/manager/teacher/:teacherId/statistics', requireAuth, async (req, r
   }
 });
 
+// Статистика преподавателя (свои занятия за период)
+app.get('/api/teacher/statistics', requireAuth, async (req, res) => {
+  try {
+    if (req.user.role !== 'teacher') {
+      return res.status(403).json({ error: 'Доступ запрещен', _timestamp: Date.now() });
+    }
+
+    const teacherId = req.user.id;
+    const { start_date, end_date } = req.query;
+
+    let query = `teacher_id=eq.${teacherId}`;
+    if (start_date) {
+      query += `&lesson_date=gte.${start_date}`;
+    }
+    if (end_date) {
+      query += `&lesson_date=lte.${end_date}`;
+    }
+
+    const response = await fetch(
+      `${SUPABASE_URL}/rest/v1/lessons?${query}&select=*`,
+      { headers: createHeaders() }
+    );
+
+    const lessons = response.ok ? await response.json() : [];
+
+    const totalMinutes = lessons.reduce((sum, lesson) => sum + (lesson.duration_minutes || 0), 0);
+    const totalHours = Math.round((totalMinutes / 60) * 100) / 100;
+
+    const byStudent = {};
+    lessons.forEach(lesson => {
+      if (!byStudent[lesson.student_id]) {
+        byStudent[lesson.student_id] = {
+          student_id: lesson.student_id,
+          lessons: [],
+          total_minutes: 0
+        };
+      }
+      byStudent[lesson.student_id].lessons.push(lesson);
+      byStudent[lesson.student_id].total_minutes += (lesson.duration_minutes || 0);
+    });
+
+    const studentIds = Object.keys(byStudent).map(id => parseInt(id));
+    let students = [];
+    if (studentIds.length > 0) {
+      const studentsResponse = await fetch(
+        `${SUPABASE_URL}/rest/v1/students?id=in.(${studentIds.join(',')})&select=*`,
+        { headers: createHeaders() }
+      );
+      students = studentsResponse.ok ? await studentsResponse.json() : [];
+    }
+
+    const studentsMap = {};
+    students.forEach(student => { studentsMap[student.id] = student; });
+
+    const statistics = Object.values(byStudent).map(stat => ({
+      student: studentsMap[stat.student_id] || { id: stat.student_id },
+      lessons_count: stat.lessons.length,
+      total_hours: Math.round((stat.total_minutes / 60) * 100) / 100,
+      lessons: stat.lessons.map(l => ({
+        id: l.id,
+        date: l.lesson_date,
+        start_time: l.start_time,
+        end_time: l.end_time,
+        duration_minutes: l.duration_minutes,
+        subject: l.subject,
+        notes: l.notes,
+        student_id: l.student_id
+      }))
+    }));
+
+    res.json({
+      total_hours: totalHours,
+      total_lessons: lessons.length,
+      by_student: statistics,
+      _timestamp: Date.now()
+    });
+  } catch (error) {
+    console.error('❌ Ошибка получения статистики преподавателя:', error);
+    res.status(500).json({ error: error.message, _timestamp: Date.now() });
+  }
+});
+
 // ===== API ДЛЯ ОТСЛЕЖИВАНИЯ ЗАНЯТИЙ =====
 
 // 16. Добавить занятие (преподаватель отмечает проведенное занятие)
