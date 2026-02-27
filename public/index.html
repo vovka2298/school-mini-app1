@@ -1311,7 +1311,7 @@
           border: 1px solid #30363d;
         ">
           <div style="font-size: 20px; font-weight: 600; margin-bottom: 16px; color: white;">
-            Добавить занятие
+            Новое занятие
           </div>
           <form id="addLessonForm" onsubmit="saveLesson(event)">
             <div style="margin-bottom: 16px;">
@@ -1333,22 +1333,6 @@
               </select>
             </div>
             <div style="margin-bottom: 16px;">
-              <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #c9d1d9;">Предмет</label>
-              <select id="lessonSubject" style="
-                width: 100%;
-                padding: 12px;
-                background: #21262d;
-                border: 1px solid #30363d;
-                border-radius: 8px;
-                color: white;
-                font-size: 14px;
-                box-sizing: border-box;
-              ">
-                <option value="">Не указан</option>
-                ${subjects.map(s => `<option value="${s}">${s}</option>`).join('')}
-              </select>
-            </div>
-            <div style="margin-bottom: 16px;">
               <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #c9d1d9;">Дата *</label>
               <input type="date" id="lessonDate" value="${today}" required style="
                 width: 100%;
@@ -1361,33 +1345,35 @@
                 box-sizing: border-box;
               ">
             </div>
-            <div style="display: flex; gap: 12px; margin-bottom: 16px;">
-              <div style="flex: 1;">
-                <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #c9d1d9;">Начало *</label>
-                <input type="time" id="lessonStartTime" value="${currentTime}" required style="
-                  width: 100%;
-                  padding: 12px;
-                  background: #21262d;
-                  border: 1px solid #30363d;
-                  border-radius: 8px;
-                  color: white;
-                  font-size: 14px;
-                  box-sizing: border-box;
-                ">
-              </div>
-              <div style="flex: 1;">
-                <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #c9d1d9;">Окончание *</label>
-                <input type="time" id="lessonEndTime" required style="
-                  width: 100%;
-                  padding: 12px;
-                  background: #21262d;
-                  border: 1px solid #30363d;
-                  border-radius: 8px;
-                  color: white;
-                  font-size: 14px;
-                  box-sizing: border-box;
-                ">
-              </div>
+            <div style="margin-bottom: 16px;">
+              <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #c9d1d9;">Начало занятия *</label>
+              <input type="time" id="lessonStartTime" value="${currentTime}" required style="
+                width: 100%;
+                padding: 12px;
+                background: #21262d;
+                border: 1px solid #30363d;
+                border-radius: 8px;
+                color: white;
+                font-size: 14px;
+                box-sizing: border-box;
+              ">
+            </div>
+            <div style="margin-bottom: 16px;">
+              <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #c9d1d9;">Длительность *</label>
+              <select id="lessonDuration" required style="
+                width: 100%;
+                padding: 12px;
+                background: #21262d;
+                border: 1px solid #30363d;
+                border-radius: 8px;
+                color: white;
+                font-size: 14px;
+                box-sizing: border-box;
+              ">
+                <option value="60">1 час</option>
+                <option value="90">1.5 часа</option>
+                <option value="120">2 часа</option>
+              </select>
             </div>
             <div style="margin-bottom: 16px;">
               <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #c9d1d9;">Заметки</label>
@@ -1446,21 +1432,22 @@
       event.preventDefault();
       
       const studentId = document.getElementById('lessonStudent').value;
-      const subject = document.getElementById('lessonSubject').value;
       const lessonDate = document.getElementById('lessonDate').value;
       const startTime = document.getElementById('lessonStartTime').value;
-      const endTime = document.getElementById('lessonEndTime').value;
+      const durationMinutes = parseInt(document.getElementById('lessonDuration').value);
       const notes = document.getElementById('lessonNotes').value.trim();
       
-      if (!startTime || !endTime) {
-        showNotice('Укажите время начала и окончания', 'error');
+      if (!startTime) {
+        showNotice('Укажите время начала занятия', 'error');
         return;
       }
       
-      if (startTime >= endTime) {
-        showNotice('Время окончания должно быть позже времени начала', 'error');
-        return;
-      }
+      // Вычисляем время окончания на основе длительности
+      const [hours, minutes] = startTime.split(':').map(Number);
+      const startDate = new Date();
+      startDate.setHours(hours, minutes, 0, 0);
+      const endDate = new Date(startDate.getTime() + durationMinutes * 60000);
+      const endTime = `${endDate.getHours().toString().padStart(2, '0')}:${endDate.getMinutes().toString().padStart(2, '0')}`;
       
       try {
         const response = await fetch(`/api/lesson?tgId=${MY_ID}`, {
@@ -1468,7 +1455,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             student_id: parseInt(studentId),
-            subject: subject || null,
+            subject: null,
             lesson_date: lessonDate,
             start_time: startTime,
             end_time: endTime,
@@ -1525,6 +1512,9 @@
           padding: 20px;
         `;
         
+        // Вычисляем длительность занятия в минутах
+        const lessonDuration = lesson.duration_minutes || 60;
+        
         modal.innerHTML = `
           <div style="
             background: #161b22;
@@ -1557,24 +1547,6 @@
                 </select>
               </div>
               <div style="margin-bottom: 16px;">
-                <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #c9d1d9;">Предмет</label>
-                <select id="editLessonSubject" style="
-                  width: 100%;
-                  padding: 12px;
-                  background: #21262d;
-                  border: 1px solid #30363d;
-                  border-radius: 8px;
-                  color: white;
-                  font-size: 14px;
-                  box-sizing: border-box;
-                ">
-                  <option value="">Не указан</option>
-                  ${subjects.map(s => `
-                    <option value="${s}" ${s === lesson.subject ? 'selected' : ''}>${s}</option>
-                  `).join('')}
-                </select>
-              </div>
-              <div style="margin-bottom: 16px;">
                 <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #c9d1d9;">Дата *</label>
                 <input type="date" id="editLessonDate" value="${lesson.lesson_date}" required style="
                   width: 100%;
@@ -1587,33 +1559,35 @@
                   box-sizing: border-box;
                 ">
               </div>
-              <div style="display: flex; gap: 12px; margin-bottom: 16px;">
-                <div style="flex: 1;">
-                  <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #c9d1d9;">Начало *</label>
-                  <input type="time" id="editLessonStartTime" value="${lesson.start_time}" required style="
-                    width: 100%;
-                    padding: 12px;
-                    background: #21262d;
-                    border: 1px solid #30363d;
-                    border-radius: 8px;
-                    color: white;
-                    font-size: 14px;
-                    box-sizing: border-box;
-                  ">
-                </div>
-                <div style="flex: 1;">
-                  <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #c9d1d9;">Окончание *</label>
-                  <input type="time" id="editLessonEndTime" value="${lesson.end_time}" required style="
-                    width: 100%;
-                    padding: 12px;
-                    background: #21262d;
-                    border: 1px solid #30363d;
-                    border-radius: 8px;
-                    color: white;
-                    font-size: 14px;
-                    box-sizing: border-box;
-                  ">
-                </div>
+              <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #c9d1d9;">Начало занятия *</label>
+                <input type="time" id="editLessonStartTime" value="${lesson.start_time}" required style="
+                  width: 100%;
+                  padding: 12px;
+                  background: #21262d;
+                  border: 1px solid #30363d;
+                  border-radius: 8px;
+                  color: white;
+                  font-size: 14px;
+                  box-sizing: border-box;
+                ">
+              </div>
+              <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #c9d1d9;">Длительность *</label>
+                <select id="editLessonDuration" required style="
+                  width: 100%;
+                  padding: 12px;
+                  background: #21262d;
+                  border: 1px solid #30363d;
+                  border-radius: 8px;
+                  color: white;
+                  font-size: 14px;
+                  box-sizing: border-box;
+                ">
+                  <option value="60" ${lessonDuration === 60 ? 'selected' : ''}>1 час</option>
+                  <option value="90" ${lessonDuration === 90 ? 'selected' : ''}>1.5 часа</option>
+                  <option value="120" ${lessonDuration === 120 ? 'selected' : ''}>2 часа</option>
+                </select>
               </div>
               <div style="margin-bottom: 16px;">
                 <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #c9d1d9;">Заметки</label>
@@ -1676,21 +1650,22 @@
       event.preventDefault();
       
       const studentId = document.getElementById('editLessonStudent').value;
-      const subject = document.getElementById('editLessonSubject').value;
       const lessonDate = document.getElementById('editLessonDate').value;
       const startTime = document.getElementById('editLessonStartTime').value;
-      const endTime = document.getElementById('editLessonEndTime').value;
+      const durationMinutes = parseInt(document.getElementById('editLessonDuration').value);
       const notes = document.getElementById('editLessonNotes').value.trim();
       
-      if (!startTime || !endTime) {
-        showNotice('Укажите время начала и окончания', 'error');
+      if (!startTime) {
+        showNotice('Укажите время начала занятия', 'error');
         return;
       }
       
-      if (startTime >= endTime) {
-        showNotice('Время окончания должно быть позже времени начала', 'error');
-        return;
-      }
+      // Вычисляем время окончания на основе длительности
+      const [hours, minutes] = startTime.split(':').map(Number);
+      const startDate = new Date();
+      startDate.setHours(hours, minutes, 0, 0);
+      const endDate = new Date(startDate.getTime() + durationMinutes * 60000);
+      const endTime = `${endDate.getHours().toString().padStart(2, '0')}:${endDate.getMinutes().toString().padStart(2, '0')}`;
       
       try {
         const response = await fetch(`/api/lesson/${lessonId}?tgId=${MY_ID}`, {
@@ -1698,7 +1673,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             student_id: parseInt(studentId),
-            subject: subject || null,
+            subject: null,
             lesson_date: lessonDate,
             start_time: startTime,
             end_time: endTime,
