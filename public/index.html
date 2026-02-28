@@ -174,6 +174,9 @@
     .state-0 { background: #21262d; color: #8b949e; }
     .state-1 { background: #238636; color: white; }
     .state-2 { background: #da3633; color: white; }
+    .state-3 { background: #f0ad4e; color: white; } /* Временное занятие - желтый */
+    .state-4 { background: #fd7e14; color: white; } /* Перенесено - оранжевый */
+    .state-5 { background: #6c757d; color: white; text-decoration: line-through; } /* Отменено - серый */
     
     .slot-time {
       font-size: 9px;
@@ -325,6 +328,9 @@
     <div class="legend-item"><div class="legend-box" style="background:#21262d"></div>Не работаю</div>
     <div class="legend-item"><div class="legend-box" style="background:#238636"></div>Свободен</div>
     <div class="legend-item"><div class="legend-box" style="background:#da3633"></div>Занят</div>
+    <div class="legend-item"><div class="legend-box" style="background:#f0ad4e"></div>Временное</div>
+    <div class="legend-item"><div class="legend-box" style="background:#fd7e14"></div>Перенесено</div>
+    <div class="legend-item"><div class="legend-box" style="background:#6c757d"></div>Отменено</div>
   </div>
   
   <div id="occupancyStats" style="
@@ -390,7 +396,7 @@
       TIMES.push(`${h.toString().padStart(2, '0')}:00`);
       if (h < 22) TIMES.push(`${h.toString().padStart(2, '0')}:30`);
     }
-    const TEXTS = ['Не работаю', 'Свободен', 'Занят'];
+    const TEXTS = ['Не работаю', 'Свободен', 'Занят', 'Временное', 'Перенесено', 'Отменено'];
     
     // Данные
     let schedule = {};
@@ -673,14 +679,23 @@
         if (!schedule[day]) schedule[day] = {};
         const currentValue = schedule[day][time] || 0;
         const current = typeof currentValue === 'object' ? currentValue.status : currentValue;
-        const next = (current + 1) % 3;
+        
+        // Определяем следующее состояние (пропускаем специальные статусы при обычном клике)
+        let next;
+        if (current === 0) {
+          next = 1; // Не работаю -> Свободен
+        } else if (current === 1) {
+          next = 2; // Свободен -> Занят
+        } else if (current === 2 || current === 3 || current === 4 || current === 5) {
+          next = 0; // Любое активное -> Не работаю
+        } else {
+          next = (current + 1) % 3; // Fallback
+        }
         
         // Сохраняем имя ученика, если оно было
         const studentName = typeof currentValue === 'object' && currentValue.student_name ? currentValue.student_name : null;
-        if (next === 2 && studentName) {
+        if ((next === 2 || next === 3 || next === 4 || next === 5) && studentName) {
           schedule[day][time] = { status: next, student_name: studentName };
-        } else if (next === 2) {
-          schedule[day][time] = next;
         } else {
           schedule[day][time] = next;
         }
@@ -692,12 +707,15 @@
           textDiv.textContent = TEXTS[next];
         }
         
-        // Удаляем имя ученика, если ячейка не занята
+        // Обработка имени ученика
         const nameDiv = element.querySelectorAll('div')[2];
-        if (nameDiv && next !== 2) {
-          nameDiv.remove();
-        } else if (next === 2 && studentName && !nameDiv) {
-          // Добавляем имя ученика, если ячейка занята и имя есть
+        if (next === 0 || next === 1) {
+          // Удаляем имя ученика для неактивных состояний
+          if (nameDiv) {
+            nameDiv.remove();
+          }
+        } else if ((next === 2 || next === 3 || next === 4 || next === 5) && studentName && !nameDiv) {
+          // Добавляем имя ученика, если ячейка активна и имя есть
           const newNameDiv = document.createElement('div');
           newNameDiv.style.cssText = 'font-size: 9px; margin-top: 4px; opacity: 0.9; line-height: 1.2;';
           newNameDiv.textContent = studentName;
@@ -1045,6 +1063,10 @@
             <div class="stat-item">
               <span class="stat-label">Всего часов:</span>
               <span class="stat-value">${data.total_hours || 0} ч</span>
+            </div>
+            <div class="stat-item" style="border-top: 1px solid #30363d; padding-top: 12px; margin-top: 12px;">
+              <span class="stat-label" style="font-size: 16px;">💰 Зарплата (600₽/ч):</span>
+              <span class="stat-value" style="font-size: 18px; color: #238636;">${((data.total_hours || 0) * 600).toLocaleString('ru-RU')} ₽</span>
             </div>
           </div>
         `;
@@ -1808,96 +1830,178 @@
     
     // Обработчик долгого нажатия (правый клик или долгое удержание)
     function handleSlotLongPress(event, day, time, state) {
-      // Обрабатываем только занятые ячейки (state === 2)
-      if (state !== 2) {
-        return;
-      }
-      
       event.preventDefault();
       event.stopPropagation();
       
-      // Получаем текущее имя ученика
+      // Получаем текущие данные ячейки
       const currentValue = schedule[day]?.[time] || 0;
+      const currentState = typeof currentValue === 'object' ? currentValue.status : currentValue;
       const currentStudentName = typeof currentValue === 'object' && currentValue.student_name ? currentValue.student_name : '';
+      
+      // Определяем, какие опции показывать
+      let showStatusOptions = false;
+      let showStudentInput = true;
+      let modalTitle = '';
+      let availableStatuses = [];
+      
+      if (currentState === 1) {
+        // Зеленая ячейка (Свободен) - можно добавить временное занятие
+        modalTitle = 'Добавить временное занятие';
+        showStatusOptions = false;
+        availableStatuses = [3]; // Только временное
+      } else if (currentState === 2 || currentState === 4 || currentState === 5) {
+        // Красная ячейка (Занят/Перенесено/Отменено) - можно изменить статус
+        modalTitle = 'Редактировать занятие';
+        showStatusOptions = true;
+        availableStatuses = [2, 4, 5]; // Занят, Перенесено, Отменено
+      } else if (currentState === 3) {
+        // Желтая ячейка (Временное) - можно редактировать или удалить
+        modalTitle = 'Редактировать временное занятие';
+        showStatusOptions = false;
+        availableStatuses = [3];
+      } else {
+        // Для других состояний не открываем модальное окно
+        return;
+      }
       
       // Создаем модальное окно
       const modal = document.createElement('div');
-      modal.id = 'studentNameModal';
+      modal.id = 'slotEditModal';
       modal.style.cssText = `
         position: fixed;
         top: 0;
         left: 0;
         right: 0;
         bottom: 0;
-        background: rgba(0, 0, 0, 0.8);
+        background: rgba(0, 0, 0, 0.85);
         z-index: 1000;
         display: flex;
         align-items: center;
         justify-content: center;
         padding: 20px;
+        animation: fadeIn 0.2s;
       `;
       
       modal.innerHTML = `
         <div style="
           background: #161b22;
-          border-radius: 12px;
+          border-radius: 16px;
           padding: 24px;
-          max-width: 350px;
+          max-width: 380px;
           width: 100%;
           border: 1px solid #30363d;
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
         ">
-          <div style="font-size: 20px; font-weight: 600; margin-bottom: 16px; color: white;">
-            Имя ученика
+          <div style="font-size: 20px; font-weight: 600; margin-bottom: 8px; color: white;">
+            ${modalTitle}
           </div>
-          <div style="font-size: 14px; color: #8b949e; margin-bottom: 16px;">
-            ${day}, ${time}
+          <div style="font-size: 14px; color: #8b949e; margin-bottom: 20px;">
+            📅 ${day}, ${time}
           </div>
-          <input type="text" id="studentNameInput" value="${currentStudentName}" placeholder="Введите имя ученика" style="
-            width: 100%;
-            padding: 12px;
-            background: #21262d;
-            border: 1px solid #30363d;
-            border-radius: 8px;
-            color: white;
-            font-size: 14px;
-            box-sizing: border-box;
-            margin-bottom: 16px;
-          " autofocus>
-          <div style="display: flex; gap: 12px;">
-            <button onclick="closeStudentNameModal()" style="
+          
+          ${showStatusOptions ? `
+            <div style="margin-bottom: 20px;">
+              <div style="font-size: 14px; font-weight: 500; margin-bottom: 12px; color: #c9d1d9;">
+                Статус занятия
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                ${availableStatuses.map(status => {
+                  const statusInfo = {
+                    2: { icon: '🔴', text: 'Обычное занятие', color: '#da3633' },
+                    4: { icon: '🔄', text: 'Перенесено', color: '#fd7e14' },
+                    5: { icon: '❌', text: 'Отменено', color: '#6c757d' }
+                  };
+                  const info = statusInfo[status];
+                  return `
+                    <label style="
+                      display: flex;
+                      align-items: center;
+                      gap: 12px;
+                      padding: 12px;
+                      background: ${currentState === status ? '#21262d' : '#0d1117'};
+                      border: 2px solid ${currentState === status ? info.color : '#30363d'};
+                      border-radius: 10px;
+                      cursor: pointer;
+                      transition: all 0.2s;
+                    " onmouseover="this.style.borderColor='${info.color}'" onmouseout="this.style.borderColor='${currentState === status ? info.color : '#30363d'}'">
+                      <input type="radio" name="slotStatus" value="${status}" ${currentState === status ? 'checked' : ''} style="
+                        width: 18px;
+                        height: 18px;
+                        cursor: pointer;
+                        accent-color: ${info.color};
+                      ">
+                      <span style="font-size: 18px;">${info.icon}</span>
+                      <span style="flex: 1; font-size: 14px; font-weight: 500; color: white;">${info.text}</span>
+                    </label>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          ` : ''}
+          
+          <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 500; color: #c9d1d9;">
+              👤 Имя ученика
+            </label>
+            <input type="text" id="slotStudentInput" value="${currentStudentName}" placeholder="Введите имя ученика" style="
+              width: 100%;
+              padding: 12px;
+              background: #21262d;
+              border: 2px solid #30363d;
+              border-radius: 10px;
+              color: white;
+              font-size: 14px;
+              box-sizing: border-box;
+              transition: border-color 0.2s;
+            " onfocus="this.style.borderColor='#58a6ff'" onblur="this.style.borderColor='#30363d'">
+          </div>
+          
+          <div style="display: flex; gap: 10px;">
+            ${currentState === 3 || (currentState >= 2 && currentStudentName) ? `
+              <button onclick="clearSlotData('${day}', '${time}')" style="
+                flex: 1;
+                padding: 12px;
+                background: #da3633;
+                color: white;
+                border: none;
+                border-radius: 10px;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.2s;
+              " onmouseover="this.style.background='#c62828'" onmouseout="this.style.background='#da3633'">
+                🗑️ Очистить
+              </button>
+            ` : ''}
+            <button onclick="closeSlotEditModal()" style="
               flex: 1;
               padding: 12px;
               background: #21262d;
               color: white;
               border: none;
-              border-radius: 8px;
+              border-radius: 10px;
               font-size: 14px;
               font-weight: 600;
               cursor: pointer;
-            ">Отмена</button>
-            <button onclick="saveStudentName('${day}', '${time}')" style="
-              flex: 1;
+              transition: all 0.2s;
+            " onmouseover="this.style.background='#30363d'" onmouseout="this.style.background='#21262d'">
+              Отмена
+            </button>
+            <button onclick="saveSlotData('${day}', '${time}', ${currentState})" style="
+              flex: 2;
               padding: 12px;
-              background: #1f6feb;
+              background: linear-gradient(135deg, #1f6feb 0%, #1565c0 100%);
               color: white;
               border: none;
-              border-radius: 8px;
+              border-radius: 10px;
               font-size: 14px;
               font-weight: 600;
               cursor: pointer;
-            ">Сохранить</button>
-            ${currentStudentName ? `
-            <button onclick="clearStudentName('${day}', '${time}')" style="
-              padding: 12px;
-              background: #da3633;
-              color: white;
-              border: none;
-              border-radius: 8px;
-              font-size: 14px;
-              font-weight: 600;
-              cursor: pointer;
-            ">Очистить</button>
-            ` : ''}
+              transition: all 0.2s;
+              box-shadow: 0 2px 8px rgba(31, 111, 235, 0.3);
+            " onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px rgba(31, 111, 235, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(31, 111, 235, 0.3)'">
+              💾 Сохранить
+            </button>
           </div>
         </div>
       `;
@@ -1906,7 +2010,7 @@
       
       // Фокус на поле ввода
       setTimeout(() => {
-        const input = document.getElementById('studentNameInput');
+        const input = document.getElementById('slotStudentInput');
         if (input) {
           input.focus();
           input.select();
@@ -1914,14 +2018,21 @@
       }, 100);
       
       // Закрытие по Enter
-      const input = document.getElementById('studentNameInput');
+      const input = document.getElementById('slotStudentInput');
       if (input) {
         input.addEventListener('keypress', function(e) {
           if (e.key === 'Enter') {
-            saveStudentName(day, time);
+            saveSlotData(day, time, currentState);
           }
         });
       }
+      
+      // Закрытие по клику вне модального окна
+      modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+          closeSlotEditModal();
+        }
+      });
     }
     
     function closeStudentNameModal() {
@@ -1931,85 +2042,66 @@
       }
     }
     
-    async function saveStudentName(day, time) {
-      const input = document.getElementById('studentNameInput');
+    function closeSlotEditModal() {
+      const modal = document.getElementById('slotEditModal');
+      if (modal) {
+        document.body.removeChild(modal);
+      }
+    }
+    
+    async function saveSlotData(day, time, originalState) {
+      const input = document.getElementById('slotStudentInput');
       if (!input) return;
       
       const studentName = input.value.trim();
       
+      // Определяем новый статус
+      let newStatus = originalState;
+      
+      // Если есть радио-кнопки, получаем выбранный статус
+      const selectedRadio = document.querySelector('input[name="slotStatus"]:checked');
+      if (selectedRadio) {
+        newStatus = parseInt(selectedRadio.value);
+      } else if (originalState === 1) {
+        // Если это была зеленая ячейка, устанавливаем временное занятие
+        newStatus = 3;
+      }
+      
       // Обновляем расписание
       if (!schedule[day]) schedule[day] = {};
-      const currentValue = schedule[day][time] || 0;
-      const state = typeof currentValue === 'object' ? currentValue.status : currentValue;
       
-      if (state === 2) {
-        if (studentName) {
-          schedule[day][time] = { status: 2, student_name: studentName };
+      if (studentName) {
+        schedule[day][time] = { status: newStatus, student_name: studentName };
+      } else {
+        schedule[day][time] = newStatus;
+      }
+      
+      // Обновляем UI
+      const slotElement = document.getElementById(`slot-${day}-${time}`);
+      if (slotElement) {
+        slotElement.className = `slot state-${newStatus}`;
+        
+        // Обновляем содержимое
+        const timeDiv = slotElement.querySelector('.slot-time');
+        slotElement.innerHTML = '';
+        if (timeDiv) {
+          slotElement.appendChild(timeDiv);
         } else {
-          schedule[day][time] = 2;
-        }
-      }
-      
-      // Обновляем UI
-      const slotElement = document.getElementById(`slot-${day}-${time}`);
-      if (slotElement && state === 2) {
-        // Удаляем старое имя, если есть
-        const nameDivs = slotElement.querySelectorAll('div');
-        if (nameDivs.length > 2) {
-          nameDivs[2].remove();
+          const newTimeDiv = document.createElement('div');
+          newTimeDiv.className = 'slot-time';
+          newTimeDiv.textContent = time;
+          slotElement.appendChild(newTimeDiv);
         }
         
-        // Добавляем новое имя
+        const textDiv = document.createElement('div');
+        textDiv.textContent = TEXTS[newStatus];
+        slotElement.appendChild(textDiv);
+        
         if (studentName) {
-          const newNameDiv = document.createElement('div');
-          newNameDiv.style.cssText = 'font-size: 9px; margin-top: 4px; opacity: 0.9; line-height: 1.2;';
-          newNameDiv.textContent = studentName;
-          slotElement.appendChild(newNameDiv);
-        }
-      }
-      
-      // Сохраняем в кеш
-      saveToCache(schedule);
-      lastScheduleHash = getScheduleHash(schedule);
-      
-      // Сохраняем на сервер
-      try {
-        const response = await fetch(`/api/schedule/${MY_ID}?tgId=${MY_ID}&t=${Date.now()}`, {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify(schedule)
-        });
-        
-        const result = await response.json();
-        if (result.ok) {
-          showNotice("Имя ученика сохранено", "#238636", 1500);
-          lastUpdateTime = result._timestamp || Date.now();
-          updateLastSyncTime();
-        }
-      } catch (saveError) {
-        console.error("Ошибка сохранения на сервер:", saveError);
-        showNotice("Ошибка сети", "#da3633", 2000);
-      }
-      
-      closeStudentNameModal();
-    }
-    
-    async function clearStudentName(day, time) {
-      // Обновляем расписание
-      if (!schedule[day]) schedule[day] = {};
-      const currentValue = schedule[day][time] || 0;
-      const state = typeof currentValue === 'object' ? currentValue.status : currentValue;
-      
-      if (state === 2) {
-        schedule[day][time] = 2;
-      }
-      
-      // Обновляем UI
-      const slotElement = document.getElementById(`slot-${day}-${time}`);
-      if (slotElement && state === 2) {
-        const nameDivs = slotElement.querySelectorAll('div');
-        if (nameDivs.length > 2) {
-          nameDivs[2].remove();
+          const nameDiv = document.createElement('div');
+          nameDiv.style.cssText = 'font-size: 9px; margin-top: 4px; opacity: 0.9; line-height: 1.2;';
+          nameDiv.textContent = studentName;
+          slotElement.appendChild(nameDiv);
         }
       }
       
@@ -2030,7 +2122,7 @@
         
         const result = await response.json();
         if (result.ok) {
-          showNotice("Имя ученика удалено", "#238636", 1500);
+          showNotice("Изменения сохранены", "#238636", 1500);
           lastUpdateTime = result._timestamp || Date.now();
           updateLastSyncTime();
         }
@@ -2039,7 +2131,77 @@
         showNotice("Ошибка сети", "#da3633", 2000);
       }
       
-      closeStudentNameModal();
+      closeSlotEditModal();
+    }
+    
+    async function clearSlotData(day, time) {
+      if (!confirm('Очистить данные этой ячейки?')) {
+        return;
+      }
+      
+      // Определяем, что делать с ячейкой
+      const currentValue = schedule[day]?.[time] || 0;
+      const currentState = typeof currentValue === 'object' ? currentValue.status : currentValue;
+      
+      if (!schedule[day]) schedule[day] = {};
+      
+      // Если это временное занятие (3), возвращаем к зеленому (1)
+      // Если это обычное занятие (2/4/5), оставляем красным но убираем имя
+      if (currentState === 3) {
+        schedule[day][time] = 1; // Возвращаем к "Свободен"
+      } else {
+        schedule[day][time] = 2; // Оставляем "Занят" без имени
+      }
+      
+      // Обновляем UI
+      const slotElement = document.getElementById(`slot-${day}-${time}`);
+      if (slotElement) {
+        const newState = schedule[day][time];
+        slotElement.className = `slot state-${newState}`;
+        
+        const timeDiv = slotElement.querySelector('.slot-time');
+        slotElement.innerHTML = '';
+        if (timeDiv) {
+          slotElement.appendChild(timeDiv);
+        } else {
+          const newTimeDiv = document.createElement('div');
+          newTimeDiv.className = 'slot-time';
+          newTimeDiv.textContent = time;
+          slotElement.appendChild(newTimeDiv);
+        }
+        
+        const textDiv = document.createElement('div');
+        textDiv.textContent = TEXTS[newState];
+        slotElement.appendChild(textDiv);
+      }
+      
+      // Обновляем статистику занятости
+      calculateOccupancy();
+      
+      // Сохраняем в кеш
+      saveToCache(schedule);
+      lastScheduleHash = getScheduleHash(schedule);
+      
+      // Сохраняем на сервер
+      try {
+        const response = await fetch(`/api/schedule/${MY_ID}?tgId=${MY_ID}&t=${Date.now()}`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(schedule)
+        });
+        
+        const result = await response.json();
+        if (result.ok) {
+          showNotice("Данные очищены", "#238636", 1500);
+          lastUpdateTime = result._timestamp || Date.now();
+          updateLastSyncTime();
+        }
+      } catch (saveError) {
+        console.error("Ошибка сохранения на сервер:", saveError);
+        showNotice("Ошибка сети", "#da3633", 2000);
+      }
+      
+      closeSlotEditModal();
     }
     
     // Глобальные функции для кнопок
@@ -2050,9 +2212,14 @@
     window.loadStatisticsTeacher = loadStatisticsTeacher;
     window.toggleStudentDetails = toggleStudentDetails;
     window.toggleSlot = toggleSlot;
+    window.closeSlotEditModal = closeSlotEditModal;
+    window.saveSlotData = saveSlotData;
+    window.clearSlotData = clearSlotData;
+    
     // Обработчик touch для долгого нажатия на мобильных устройствах
     function handleSlotTouchStart(event, day, time, state) {
-      if (state !== 2) {
+      // Разрешаем долгий клик для всех активных ячеек
+      if (state === 0) {
         return;
       }
       
@@ -2087,8 +2254,6 @@
     window.handleSlotTouchStart = handleSlotTouchStart;
     window.handleSlotTouchEnd = handleSlotTouchEnd;
     window.closeStudentNameModal = closeStudentNameModal;
-    window.saveStudentName = saveStudentName;
-    window.clearStudentName = clearStudentName;
     
     // Календарный вид расписания в полноэкранном модальном окне
     function showCalendarView() {
@@ -2155,20 +2320,21 @@
           let rowspan = 1;
           let shouldSkip = false;
           
-          if (state === 2 && studentName && timeIndex > 0) {
+          // Объединяем ячейки если это занятие (любой активный статус) с одним учеником
+          if ((state === 2 || state === 3 || state === 4 || state === 5) && studentName && timeIndex > 0) {
             const prevTime = TIMES[timeIndex - 1];
             const prevSlotValue = schedule[day]?.[prevTime] || 0;
             const prevState = typeof prevSlotValue === 'object' ? prevSlotValue.status : prevSlotValue;
             const prevStudentName = typeof prevSlotValue === 'object' ? prevSlotValue.student_name : null;
             
-            // Если предыдущий слот тоже занят тем же учеником, объединяем
-            if (prevState === 2 && prevStudentName === studentName) {
+            // Если предыдущий слот тоже занят тем же учеником и тем же статусом, объединяем
+            if (prevState === state && prevStudentName === studentName) {
               shouldSkip = true;
             }
           }
           
-          if (!shouldSkip && state === 2 && studentName) {
-            // Проверяем, сколько следующих слотов заняты тем же учеником
+          if (!shouldSkip && (state === 2 || state === 3 || state === 4 || state === 5) && studentName) {
+            // Проверяем, сколько следующих слотов заняты тем же учеником с тем же статусом
             let nextIndex = timeIndex + 1;
             while (nextIndex < TIMES.length) {
               const nextTime = TIMES[nextIndex];
@@ -2176,7 +2342,7 @@
               const nextState = typeof nextSlotValue === 'object' ? nextSlotValue.status : nextSlotValue;
               const nextStudentName = typeof nextSlotValue === 'object' ? nextSlotValue.student_name : null;
               
-              if (nextState === 2 && nextStudentName === studentName) {
+              if (nextState === state && nextStudentName === studentName) {
                 rowspan++;
                 nextIndex++;
               } else {
@@ -2317,6 +2483,15 @@
             textColor = 'white';
           } else if (cell.state === 2) {
             bgColor = '#da3633';
+            textColor = 'white';
+          } else if (cell.state === 3) {
+            bgColor = '#f0ad4e';
+            textColor = 'white';
+          } else if (cell.state === 4) {
+            bgColor = '#fd7e14';
+            textColor = 'white';
+          } else if (cell.state === 5) {
+            bgColor = '#6c757d';
             textColor = 'white';
           }
           
