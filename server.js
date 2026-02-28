@@ -554,7 +554,8 @@ app.get('/api/manager/teachers', requireAuth, async (req, res) => {
       // Подсчитываем занятые слоты (статус 2 = занят)
       let occupiedSlots = 0;
       schedules.forEach(slot => {
-        if (slot.status === 2) {
+        // Считаем все активные занятия (обычные, временные, перенесённые, отменённые)
+        if (slot.status === 2 || slot.status === 3 || slot.status === 4 || slot.status === 5) {
           occupiedSlots++;
         }
       });
@@ -617,7 +618,7 @@ app.get('/api/manager/teacher/:teacherId', requireAuth, async (req, res) => {
     
     // Получаем расписание
     const scheduleResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/schedules?teacher_id=eq.${teacherId}&select=day,time_slot,status`,
+      `${SUPABASE_URL}/rest/v1/schedules?teacher_id=eq.${teacherId}&select=day,time_slot,status,student_name`,
       { headers: createHeaders() }
     );
     const schedules = scheduleResponse.ok ? await scheduleResponse.json() : [];
@@ -628,7 +629,15 @@ app.get('/api/manager/teacher/:teacherId', requireAuth, async (req, res) => {
     days.forEach(day => { schedule[day] = {}; });
     schedules.forEach(row => {
       if (schedule[row.day]) {
-        schedule[row.day][row.time_slot] = row.status;
+        // Если есть имя ученика, сохраняем как объект, иначе как число
+        if (row.student_name) {
+          schedule[row.day][row.time_slot] = {
+            status: row.status,
+            student_name: row.student_name
+          };
+        } else {
+          schedule[row.day][row.time_slot] = row.status;
+        }
       }
     });
     
@@ -684,7 +693,7 @@ app.get('/api/manager/teacher/:teacherId/schedule', requireAuth, async (req, res
     
     const { teacherId } = req.params;
     const response = await fetch(
-      `${SUPABASE_URL}/rest/v1/schedules?teacher_id=eq.${teacherId}&select=day,time_slot,status`,
+      `${SUPABASE_URL}/rest/v1/schedules?teacher_id=eq.${teacherId}&select=day,time_slot,status,student_name`,
       { headers: createHeaders() }
     );
     
@@ -699,7 +708,15 @@ app.get('/api/manager/teacher/:teacherId/schedule', requireAuth, async (req, res
     
     schedules.forEach(row => {
       if (schedule[row.day]) {
-        schedule[row.day][row.time_slot] = row.status;
+        // Если есть имя ученика, сохраняем как объект, иначе как число
+        if (row.student_name) {
+          schedule[row.day][row.time_slot] = {
+            status: row.status,
+            student_name: row.student_name
+          };
+        } else {
+          schedule[row.day][row.time_slot] = row.status;
+        }
       }
     });
     
