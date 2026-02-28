@@ -587,7 +587,8 @@
         TIMES.forEach(time => {
           const slotValue = schedule[day]?.[time] || 0;
           const state = typeof slotValue === 'object' ? slotValue.status : slotValue;
-          if (state === 2) {
+          // Считаем все активные занятия (обычные, временные, перенесённые, отменённые)
+          if (state === 2 || state === 3 || state === 4 || state === 5) {
             occupiedSlots++;
           }
         });
