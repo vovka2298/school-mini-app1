@@ -404,6 +404,9 @@
     .slot-0 { background: #21262d; }
     .slot-1 { background: #238636; }
     .slot-2 { background: #da3633; }
+    .slot-3 { background: #f0ad4e; }
+    .slot-4 { background: #fd7e14; }
+    .slot-5 { background: #6c757d; }
   </style>
 </head>
 <body>
@@ -631,7 +634,8 @@
         TIMES.forEach(time => {
           const slotValue = schedule[day]?.[time] || 0;
           const state = typeof slotValue === 'object' ? slotValue.status : slotValue;
-          if (state === 2) {
+          // Считаем все активные занятия (обычные, временные, перенесённые, отменённые)
+          if (state === 2 || state === 3 || state === 4 || state === 5) {
             occupiedSlots++;
           }
         });
@@ -800,7 +804,8 @@
         html += `<tr><td style="font-size: 10px; padding: 4px;">${time}</td>`;
         DAYS.forEach((_, i) => {
           const day = FULL_DAYS[i];
-          const state = schedule[day]?.[time] || 0;
+          const slotValue = schedule[day]?.[time] || 0;
+          const state = typeof slotValue === 'object' ? slotValue.status : slotValue;
           html += `<td><div class="schedule-slot slot-${state}" title="${time} ${day}"></div></td>`;
         });
         html += '</tr>';
@@ -812,6 +817,9 @@
       html += '<div><div class="schedule-slot slot-0" style="display: inline-block; margin-right: 8px;"></div>Не работаю</div>';
       html += '<div><div class="schedule-slot slot-1" style="display: inline-block; margin-right: 8px;"></div>Свободен</div>';
       html += '<div><div class="schedule-slot slot-2" style="display: inline-block; margin-right: 8px;"></div>Занят</div>';
+      html += '<div><div class="schedule-slot slot-3" style="display: inline-block; margin-right: 8px;"></div>Временное</div>';
+      html += '<div><div class="schedule-slot slot-4" style="display: inline-block; margin-right: 8px;"></div>Перенесено</div>';
+      html += '<div><div class="schedule-slot slot-5" style="display: inline-block; margin-right: 8px;"></div>Отменено</div>';
       html += '</div>';
       
       return html;
