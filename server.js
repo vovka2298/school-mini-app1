@@ -554,8 +554,7 @@ app.get('/api/manager/teachers', requireAuth, async (req, res) => {
       // Подсчитываем занятые слоты (статус 2 = занят)
       let occupiedSlots = 0;
       schedules.forEach(slot => {
-        // Считаем все активные занятия (обычные, временные, перенесённые, отменённые)
-        if (slot.status === 2 || slot.status === 3 || slot.status === 4 || slot.status === 5) {
+        if (slot.status === 2) {
           occupiedSlots++;
         }
       });
