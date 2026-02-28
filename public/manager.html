@@ -864,6 +864,10 @@
               <span class="stat-label">Всего занятий:</span>
               <span class="stat-value">${data.total_lessons || 0}</span>
             </div>
+            <div class="stat-item" style="border-top: 1px solid #30363d; padding-top: 12px; margin-top: 12px;">
+              <span class="stat-label" style="font-size: 16px;">💰 Зарплата (600₽/ч):</span>
+              <span class="stat-value" style="font-size: 18px; color: #238636;">${((data.total_hours || 0) * 600).toLocaleString('ru-RU')} ₽</span>
+            </div>
           </div>
         `;
         
