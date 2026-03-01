@@ -617,7 +617,7 @@ app.get('/api/manager/teacher/:teacherId', requireAuth, async (req, res) => {
     
     // Получаем расписание
     const scheduleResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/schedules?teacher_id=eq.${teacherId}&select=day,time_slot,status,student_name`,
+      `${SUPABASE_URL}/rest/v1/schedules?teacher_id=eq.${teacherId}&select=day,time_slot,status`,
       { headers: createHeaders() }
     );
     const schedules = scheduleResponse.ok ? await scheduleResponse.json() : [];
@@ -628,15 +628,8 @@ app.get('/api/manager/teacher/:teacherId', requireAuth, async (req, res) => {
     days.forEach(day => { schedule[day] = {}; });
     schedules.forEach(row => {
       if (schedule[row.day]) {
-        // Если есть имя ученика, сохраняем как объект, иначе как число
-        if (row.student_name) {
-          schedule[row.day][row.time_slot] = {
-            status: row.status,
-            student_name: row.student_name
-          };
-        } else {
-          schedule[row.day][row.time_slot] = row.status;
-        }
+        // Для менеджера возвращаем только числовой статус (как было изначально)
+        schedule[row.day][row.time_slot] = row.status;
       }
     });
     
@@ -692,7 +685,7 @@ app.get('/api/manager/teacher/:teacherId/schedule', requireAuth, async (req, res
     
     const { teacherId } = req.params;
     const response = await fetch(
-      `${SUPABASE_URL}/rest/v1/schedules?teacher_id=eq.${teacherId}&select=day,time_slot,status,student_name`,
+      `${SUPABASE_URL}/rest/v1/schedules?teacher_id=eq.${teacherId}&select=day,time_slot,status`,
       { headers: createHeaders() }
     );
     
@@ -707,15 +700,8 @@ app.get('/api/manager/teacher/:teacherId/schedule', requireAuth, async (req, res
     
     schedules.forEach(row => {
       if (schedule[row.day]) {
-        // Если есть имя ученика, сохраняем как объект, иначе как число
-        if (row.student_name) {
-          schedule[row.day][row.time_slot] = {
-            status: row.status,
-            student_name: row.student_name
-          };
-        } else {
-          schedule[row.day][row.time_slot] = row.status;
-        }
+        // Для менеджера возвращаем только числовой статус (как было изначально)
+        schedule[row.day][row.time_slot] = row.status;
       }
     });
     
