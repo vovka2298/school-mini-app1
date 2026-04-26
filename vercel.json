@@ -8,17 +8,8 @@
   ],
   "routes": [
     {
-      "src": "/api/(.*)",
-      "dest": "/server.js"
-    },
-    {
       "src": "/(.*)",
-      "dest": "/server.js",
-      "headers": {
-        "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
-        "Pragma": "no-cache",
-        "Expires": "0"
-      }
+      "dest": "/server.js"
     }
   ]
 }
