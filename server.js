@@ -19,6 +19,40 @@ const createHeaders = (useServiceKey = false) => ({
   'Prefer': 'return=minimal'
 });
 
+// ===== МАППИНГ TELEGRAM ID → ACCESS TOKEN (для редиректа со старого проекта) =====
+const TG_TOKEN_MAP = {
+  '8526163876': { token: '1ca93e3f6aba', role: 'manager' },
+  '1075759850': { token: '401d410c5495', role: 'teacher' },
+  '1190701521': { token: 'be1a41b1f4d0', role: 'teacher' },
+  '1079748786': { token: 'cbf8634b39c6', role: 'teacher' },
+  '392547397':  { token: '5fe9930bc6b0', role: 'teacher' },
+  '532460645':  { token: 'd67cd3905000', role: 'teacher' },
+  '685245871':  { token: 'faff180f4990', role: 'teacher' },
+  '1024935989': { token: '1b574b9fc66c', role: 'teacher' },
+  '6821205739': { token: 'd6779da7b086', role: 'teacher' },
+  '633155474':  { token: '849ff2a37624', role: 'teacher' },
+};
+
+// ===== РЕДИРЕКТ НА НОВЫЙ САЙТ =====
+// Старые ссылки вида /?tgId=TELEGRAM_ID → rep-math.ru/{role}?t={token}
+// Старые ссылки вида /?parentId=UUID → rep-math.ru/parent?parentId=UUID
+app.get('/', (req, res, next) => {
+  // Редирект пользователей по tgId
+  const tgId = (req.query.tgId || '').toString().trim();
+  if (tgId && TG_TOKEN_MAP[tgId]) {
+    const { token, role } = TG_TOKEN_MAP[tgId];
+    return res.redirect(302, `https://www.rep-math.ru/${role}?t=${token}`);
+  }
+
+  // Редирект родителей по parentId
+  const parentId = req.query.parentId;
+  if (parentId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(parentId)) {
+    return res.redirect(302, `https://www.rep-math.ru/parent?parentId=${encodeURIComponent(parentId)}`);
+  }
+
+  next();
+});
+
 // ===== УТИЛИТЫ ДЛЯ РАБОТЫ С ПОЛЬЗОВАТЕЛЯМИ =====
 
 // Получить пользователя по telegram_id
