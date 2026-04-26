@@ -33,11 +33,11 @@ const TG_TOKEN_MAP = {
   '633155474':  { token: '849ff2a37624', role: 'teacher' },
 };
 
-// ===== РЕДИРЕКТ НА НОВЫЙ САЙТ =====
-// Старые ссылки вида /?tgId=TELEGRAM_ID → rep-math.ru/{role}?t={token}
+// ===== РЕДИРЕКТ НА НОВЫЙ САЙТ (middleware для всех путей) =====
+// Старые ссылки вида /*?tgId=TELEGRAM_ID → rep-math.ru/{role}?t={token}
 // Старые ссылки вида /?parentId=UUID → rep-math.ru/parent?parentId=UUID
-app.get('/', (req, res, next) => {
-  // Редирект пользователей по tgId
+app.use((req, res, next) => {
+  // Редирект пользователей по tgId (любой путь)
   const tgId = (req.query.tgId || '').toString().trim();
   if (tgId && TG_TOKEN_MAP[tgId]) {
     const { token, role } = TG_TOKEN_MAP[tgId];
