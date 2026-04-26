@@ -4,7 +4,6 @@ const fetch = require('node-fetch');
 
 const app = express();
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
 
 // Конфигурация Supabase
 const SUPABASE_URL = 'https://rtywenfvaoxsjdkulmdk.supabase.co';
@@ -52,6 +51,8 @@ app.use((req, res, next) => {
 
   next();
 });
+
+app.use(express.static(path.join(__dirname, 'public')));
 
 // ===== УТИЛИТЫ ДЛЯ РАБОТЫ С ПОЛЬЗОВАТЕЛЯМИ =====
 
